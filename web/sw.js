@@ -10,7 +10,7 @@
 //
 // Bump CACHE_VERSION whenever you want to force every saved copy to refresh.
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const APP_CACHE = `expense-app-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `expense-runtime-${CACHE_VERSION}`;
 

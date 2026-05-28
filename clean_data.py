@@ -33,6 +33,10 @@ MOVE_PATTERNS = [
     "ELECTRONIC FUNDS TRANSFER", "DEPOSIT", "FEE REBATE",
 ]
 
+# These signals only mean a transfer when money actually came IN. A "DEPOSIT"
+# that is money OUT (a security / damage deposit) is real spending, not a move.
+INFLOW_ONLY_PATTERNS = {"DEPOSIT", "FEE REBATE"}
+
 # ── The label vocabularies (also used to populate the UI dropdowns) ──
 SPENDING_CATEGORIES = [
     # Food & drink
@@ -406,10 +410,35 @@ def _mtext(desc):
 
 
 # ── 2. Flow + label + display name ─────────────────────────────
-def classify_flow(desc):
-    """Return 'Transfer' if a move signal is present, else 'Spending'."""
+def classify_flow(desc, debit=0.0, credit=0.0):
+    """Return 'Transfer' if a move signal is present, else 'Spending'.
+
+    DEPOSIT / FEE REBATE only signal a transfer when money actually came in, so
+    a "DEPOSIT" that is money OUT (e.g. a security / damage deposit) stays
+    Spending instead of being silently dropped from the spending totals."""
     u = _mtext(desc)
-    return "Transfer" if any(p in u for p in MOVE_PATTERNS) else "Spending"
+    hits = [p for p in MOVE_PATTERNS if p in u]
+    if not hits:
+        return "Spending"
+    if all(p in INFLOW_ONLY_PATTERNS for p in hits) and debit and not credit:
+        return "Spending"
+    return "Transfer"
+
+
+def _kw_match(kw, text):
+    """Substring match, but an alphanumeric keyword edge must land on a word
+    boundary — so "GAP" matches "GAP OUTLET" but not "SINGAPORE", and "RENT"
+    no longer matches "CURRENT". Keywords with non-alphanumeric edges (UBR*,
+    'S NF) keep matching exactly as a plain substring would."""
+    left, right = kw[0].isalnum(), kw[-1].isalnum()
+    n, klen = len(text), len(kw)
+    i = text.find(kw)
+    while i != -1:
+        if (not left or i == 0 or not text[i - 1].isalnum()) and \
+           (not right or i + klen >= n or not text[i + klen].isalnum()):
+            return True
+        i = text.find(kw, i + 1)
+    return False
 
 
 def apply_label(desc, mapping):
@@ -417,7 +446,7 @@ def apply_label(desc, mapping):
     u = _mtext(desc)
     best, matched = "", ""
     for kw, label in mapping.items():
-        if kw in u and len(kw) > len(best):
+        if len(kw) > len(best) and _kw_match(kw, u):
             best, matched = kw, label
     return matched if best else "Uncategorized"
 

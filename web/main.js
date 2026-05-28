@@ -6,9 +6,17 @@ const statusEl = $("status");
 
 let pyodide = null;
 
+// Trusted markup only (spinners, the download link with a blob: URL).
 function setStatus(msg, kind = "") {
   statusEl.className = kind;
   statusEl.innerHTML = msg;
+}
+
+// Plain text — use for anything that includes an exception message or other
+// untrusted content, so it can never be interpreted as HTML.
+function setStatusText(text, kind = "") {
+  statusEl.className = kind;
+  statusEl.textContent = text;
 }
 
 function readText(file) {
@@ -54,10 +62,10 @@ import io, build_excel
 
     buildBtn.disabled = false;
     buildBtn.innerHTML = "Build my workbook";
-    setStatus("Ready — your files stay on this device.", "ok");
+    setStatusText("Ready — your files stay on this device.", "ok");
   } catch (e) {
     console.error(e);
-    setStatus("Couldn't load the engine: " + e.message, "err");
+    setStatusText("Couldn't load the engine: " + e.message, "err");
   }
 }
 
@@ -67,7 +75,7 @@ async function buildWorkbook() {
   const priorFile = $("prior").files[0] || null;
 
   if (creditFiles.length === 0 && debitFiles.length === 0) {
-    setStatus("Please choose at least one CSV file first.", "err");
+    setStatusText("Please choose at least one CSV file first.", "err");
     return;
   }
 
@@ -107,7 +115,7 @@ build_excel.build_bytes(_specs, _pb)
     const clean = msg.includes("No transactions")
       ? "No transactions found — are these CIBC CSV exports?"
       : "Something went wrong: " + msg;
-    setStatus(clean, "err");
+    setStatusText(clean, "err");
   } finally {
     buildBtn.disabled = false;
   }
