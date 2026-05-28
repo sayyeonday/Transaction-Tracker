@@ -56,13 +56,24 @@ from automatically — no need to tell it.
 2026-05-26,Internet Banking E-TRANSFER 000000000000 JANE DOE,,50.00
 ```
 
-**BMO** files have a header row and one signed amount column (a purchase is
-positive, a payment received is negative):
+**BMO** files have a header row. There are two layouts and both are detected:
+
+*Credit card* — one signed amount column (a purchase is positive, a payment
+received is negative):
 
 ```
 Item #,Card #,Transaction Date,Posting Date,Transaction Amount,Description
 1,1234********5678,20260526,20260527,4.50,"WAL-MART SUPERCENTER ANYTOWN, ON"
 2,1234********5678,20260518,20260519,-816.19,PAYMENT RECEIVED - THANK YOU
+```
+
+*Chequing / debit* — a **Transaction Type** column (DR = money out, CR = money
+in) sets the direction:
+
+```
+First Bank Card,Transaction Type,Date Posted,Transaction Amount,Description
+'5100********1234',DR,20260524,-12.99,WAL-MART SUPERCENTER
+'5100********1234',CR,20260520,2000.00,PAYROLL DEPOSIT
 ```
 
 ---

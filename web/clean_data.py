@@ -292,18 +292,27 @@ def _parse_cibc(rows, source):
 
 
 def _bmo_header_index(rows):
-    """Index of the BMO header row, or None if this isn't a BMO export."""
+    """Index of the BMO header row, or None if this isn't a BMO export.
+
+    BMO has two layouts, both with a 'Description' column:
+      - credit card : Item #, Card #, Transaction Date, Posting Date,
+                       Transaction Amount, Description
+      - chequing    : First Bank Card, Transaction Type, Date Posted,
+                       Transaction Amount, Description
+    """
     for i, cells in enumerate(rows):
         cleaned = [_clean(c).lower() for c in cells]
-        if "transaction date" in cleaned and "description" in cleaned:
+        if "description" in cleaned and (
+                "transaction date" in cleaned or "date posted" in cleaned
+                or "transaction type" in cleaned):
             return i
     return None
 
 
 def _parse_bmo(rows, hdr, source):
-    """BMO: a header names the columns and there is one signed Transaction
-    Amount column — a purchase is POSITIVE (money out), a payment received is
-    NEGATIVE (money in)."""
+    """BMO. The amount sign convention differs by product, so the direction is
+    taken from the Transaction Type column (DR/CR) when present (chequing);
+    otherwise from the amount sign (credit card: purchase +, payment -)."""
     header = [_clean(c).lower() for c in rows[hdr]]
 
     def col(*needles):
@@ -312,12 +321,20 @@ def _parse_bmo(rows, hdr, source):
                 return idx
         return None
 
-    i_date = col("transaction", "date")
-    i_amt = col("transaction", "amount")
+    i_date = col("transaction", "date")     # credit card
+    if i_date is None:
+        i_date = col("date")                # chequing: "Date Posted"
+    i_amt = col("amount")
+    if i_amt is None:                       # amount column labelled just "Transaction"
+        for idx, name in enumerate(header):
+            if "transaction" in name and "type" not in name and "date" not in name:
+                i_amt = idx
+                break
     i_desc = col("description")
+    i_type = col("type")                    # "Transaction Type" (DR/CR) on chequing
     if i_date is None or i_amt is None:
         return pd.DataFrame()
-    need = max(i for i in (i_date, i_amt, i_desc) if i is not None)
+    need = max(i for i in (i_date, i_amt, i_desc, i_type) if i is not None)
 
     records = []
     for cells in rows[hdr + 1:]:
@@ -327,11 +344,19 @@ def _parse_bmo(rows, hdr, source):
         if not date:
             continue
         amt = _to_float(cells[i_amt])
+        ttype = _clean(cells[i_type]).upper() if i_type is not None else ""
+        if "CR" in ttype:                       # chequing credit = money in
+            debit, credit = 0.0, abs(amt)
+        elif "DR" in ttype:                     # chequing debit = money out
+            debit, credit = abs(amt), 0.0
+        else:                                   # credit card: + purchase, - payment
+            debit = amt if amt > 0 else 0.0
+            credit = -amt if amt < 0 else 0.0
         records.append({
             "date": date,
             "description": _clean(cells[i_desc]) if i_desc is not None else "",
-            "debit": amt if amt > 0 else 0.0,     # purchase (+) = money out
-            "credit": -amt if amt < 0 else 0.0,   # payment received (-) = money in
+            "debit": debit,
+            "credit": credit,
             "source": source,
         })
     return pd.DataFrame(records)
