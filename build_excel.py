@@ -27,6 +27,7 @@ import os
 import pandas as pd
 from openpyxl import Workbook, load_workbook
 from openpyxl.chart import BarChart, PieChart, Reference
+from openpyxl.chart.data_source import AxDataSource, StrData, StrRef, StrVal
 from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -169,6 +170,19 @@ def _write_header(ws, row, headers):
         cell = ws.cell(row=row, column=c, value=text)
         cell.fill = HEADER_FILL
         cell.font = HEADER_FONT
+
+
+def _text_categories(chart, labels):
+    """Make the category axis a STRING reference with cached labels.
+
+    openpyxl's set_categories writes a numeric reference (numRef); when the
+    category cells hold text (category names, month labels) Excel treats that
+    as unreadable content and strips the chart on open. A strRef with a cache
+    is what Excel expects for text categories."""
+    ref = chart.series[0].cat.numRef.f
+    cache = StrData(pt=[StrVal(idx=i, v=str(v)) for i, v in enumerate(labels)],
+                    ptCount=len(labels))
+    chart.series[0].cat = AxDataSource(strRef=StrRef(f=ref, strCache=cache))
 
 
 def build_lists(ws):
@@ -314,6 +328,7 @@ def build_dashboard(ws, df):
     cats = Reference(ws, min_col=1, min_row=cat_top + 1, max_row=cat_end)
     cat_chart.add_data(data, titles_from_data=True)
     cat_chart.set_categories(cats)
+    _text_categories(cat_chart, list(cd.SPENDING_CATEGORIES))
     cat_chart.dataLabels = DataLabelList()
     cat_chart.dataLabels.showPercent = True
     ws.add_chart(cat_chart, "D4")
@@ -328,6 +343,7 @@ def build_dashboard(ws, df):
     mcats = Reference(ws, min_col=1, min_row=mon_top + 1, max_row=mon_end)
     mon_chart.add_data(mdata, titles_from_data=True)
     mon_chart.set_categories(mcats)
+    _text_categories(mon_chart, months)
     mon_chart.x_axis.delete = False   # force month labels to render
     mon_chart.y_axis.delete = False
     ws.add_chart(mon_chart, "D24")
