@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net https://pypi.org https://files.pythonhosted.org; style-src 'self' 'unsafe-inline'; img-src 'self' data:; worker-src 'self' blob:; base-uri 'none'; form-action 'none'; object-src 'none'" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Expense Tracker</title>
   <style>
@@ -82,7 +83,9 @@
     </ol>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"
+          integrity="sha384-i3R37b3tF+HWudsUf1VSEOY2YxwSNMqY8DQa9Z0O3xh+NkJ9o+yjcGyIi5huj+nB"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="main.js"></script>
 </body>
 </html>

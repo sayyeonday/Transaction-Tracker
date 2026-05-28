@@ -56,7 +56,7 @@ MONEY_FMT2 = "$#,##0.00"
 
 
 # ── ingest (reuses clean_data, but writes nothing) ─────────────────
-DEDUP_KEY = ["date", "description", "debit", "credit"]
+DEDUP_KEY = ["date", "source", "description", "debit", "credit"]
 
 
 def _finalize(df):
