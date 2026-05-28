@@ -26,7 +26,8 @@ import os
 
 import pandas as pd
 from openpyxl import Workbook, load_workbook
-from openpyxl.chart import BarChart, Reference
+from openpyxl.chart import BarChart, PieChart, Reference
+from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -305,16 +306,16 @@ def build_dashboard(ws, df):
     ws.column_dimensions["B"].width = 14
 
     # Charts (anchored in column D so they don't overlap the tables)
-    cat_chart = BarChart()
-    cat_chart.type = "bar"
+    cat_chart = PieChart()
     cat_chart.title = "Spending by category"
-    cat_chart.legend = None
     cat_chart.height = 9
     cat_chart.width = 18
     data = Reference(ws, min_col=2, min_row=cat_top, max_row=cat_end)
     cats = Reference(ws, min_col=1, min_row=cat_top + 1, max_row=cat_end)
     cat_chart.add_data(data, titles_from_data=True)
     cat_chart.set_categories(cats)
+    cat_chart.dataLabels = DataLabelList()
+    cat_chart.dataLabels.showPercent = True
     ws.add_chart(cat_chart, "D4")
 
     mon_chart = BarChart()
@@ -327,6 +328,8 @@ def build_dashboard(ws, df):
     mcats = Reference(ws, min_col=1, min_row=mon_top + 1, max_row=mon_end)
     mon_chart.add_data(mdata, titles_from_data=True)
     mon_chart.set_categories(mcats)
+    mon_chart.x_axis.delete = False   # force month labels to render
+    mon_chart.y_axis.delete = False
     ws.add_chart(mon_chart, "D24")
 
 
