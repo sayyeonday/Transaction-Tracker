@@ -29,6 +29,9 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.chart import BarChart, PieChart, Reference
 from openpyxl.chart.data_source import AxDataSource, StrData, StrRef, StrVal
 from openpyxl.chart.label import DataLabelList
+from openpyxl.chart.text import RichText
+from openpyxl.drawing.text import (
+    CharacterProperties, Paragraph, ParagraphProperties)
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -184,6 +187,33 @@ def _text_categories(chart, labels):
     cache = StrData(pt=[StrVal(idx=i, v=str(v)) for i, v in enumerate(labels)],
                     ptCount=len(labels))
     chart.series[0].cat = AxDataSource(strRef=StrRef(f=ref, strCache=cache))
+
+
+def _rich_size(pt, bold=False):
+    """A RichText block that forces a font size (points) on chart text."""
+    cp = CharacterProperties(sz=int(pt * 100), b=bold)
+    return RichText(p=[Paragraph(pPr=ParagraphProperties(defRPr=cp),
+                                 endParaRPr=cp)])
+
+
+def _set_title(chart, text, pt=15):
+    """Set a chart title and enlarge its font."""
+    chart.title = text
+    cp = CharacterProperties(sz=int(pt * 100), b=True)
+    for para in chart.title.tx.rich.p:
+        para.pPr = ParagraphProperties(defRPr=cp)
+        for run in (para.r or []):
+            run.rPr = cp
+
+
+def _style_pie(chart):
+    """Big readable pie: right-hand legend and larger label/legend fonts."""
+    chart.legend.position = "r"
+    chart.legend.txPr = _rich_size(11)
+    chart.dataLabels = DataLabelList()
+    chart.dataLabels.showPercent = True
+    chart.dataLabels.showLegendKey = False
+    chart.dataLabels.txPr = _rich_size(10, bold=True)
 
 
 def build_lists(ws):
@@ -351,26 +381,42 @@ def build_dashboard(ws, df):
     ws.column_dimensions["A"].width = 22
     ws.column_dimensions["B"].width = 22
 
-    # Charts (anchored in column D so they don't overlap the tables)
+    # Charts live to the right of the tables (column D+). The two category
+    # pies are grouped first (big, since there are many categories), then the
+    # monthly bar. Pies are sized large with a right-hand legend so all
+    # categories stay readable.
+    PIE_W, PIE_H = 28, 17
+
     cat_chart = PieChart()
-    cat_chart.title = "Spending by category (all months)"
-    cat_chart.height = 9
-    cat_chart.width = 18
+    _set_title(cat_chart, "Spending by category — all months", 16)
+    cat_chart.height = PIE_H
+    cat_chart.width = PIE_W
     data = Reference(ws, min_col=2, min_row=cat_top, max_row=cat_end)
     cats = Reference(ws, min_col=1, min_row=cat_top + 1, max_row=cat_end)
     cat_chart.add_data(data, titles_from_data=True)
     cat_chart.set_categories(cats)
     _text_categories(cat_chart, list(cd.SPENDING_CATEGORIES))
-    cat_chart.dataLabels = DataLabelList()
-    cat_chart.dataLabels.showPercent = True
-    ws.add_chart(cat_chart, "D4")
+    _style_pie(cat_chart)
+    ws.add_chart(cat_chart, "D3")
+
+    pm_chart = PieChart()
+    _set_title(pm_chart, "Spending by category — selected month (see cell B8)", 16)
+    pm_chart.height = PIE_H
+    pm_chart.width = PIE_W
+    pdata = Reference(ws, min_col=2, min_row=pm_top, max_row=pm_end)
+    pcats = Reference(ws, min_col=1, min_row=pm_top + 1, max_row=pm_end)
+    pm_chart.add_data(pdata, titles_from_data=True)
+    pm_chart.set_categories(pcats)
+    _text_categories(pm_chart, list(cd.SPENDING_CATEGORIES))
+    _style_pie(pm_chart)
+    ws.add_chart(pm_chart, "D39")
 
     mon_chart = BarChart()
     mon_chart.type = "col"
-    mon_chart.title = "Monthly spending"
+    _set_title(mon_chart, "Monthly spending", 16)
     mon_chart.legend = None
-    mon_chart.height = 9
-    mon_chart.width = 18
+    mon_chart.height = 11
+    mon_chart.width = PIE_W
     mdata = Reference(ws, min_col=2, min_row=mon_top, max_row=mon_end)
     mcats = Reference(ws, min_col=1, min_row=mon_top + 1, max_row=mon_end)
     mon_chart.add_data(mdata, titles_from_data=True)
@@ -378,20 +424,9 @@ def build_dashboard(ws, df):
     _text_categories(mon_chart, months)
     mon_chart.x_axis.delete = False   # force month labels to render
     mon_chart.y_axis.delete = False
-    ws.add_chart(mon_chart, "D24")
-
-    pm_chart = PieChart()
-    pm_chart.title = "Spending by category (selected month)"
-    pm_chart.height = 9
-    pm_chart.width = 18
-    pdata = Reference(ws, min_col=2, min_row=pm_top, max_row=pm_end)
-    pcats = Reference(ws, min_col=1, min_row=pm_top + 1, max_row=pm_end)
-    pm_chart.add_data(pdata, titles_from_data=True)
-    pm_chart.set_categories(pcats)
-    _text_categories(pm_chart, list(cd.SPENDING_CATEGORIES))
-    pm_chart.dataLabels = DataLabelList()
-    pm_chart.dataLabels.showPercent = True
-    ws.add_chart(pm_chart, "D44")
+    mon_chart.x_axis.txPr = _rich_size(10)
+    mon_chart.y_axis.txPr = _rich_size(10)
+    ws.add_chart(mon_chart, "D75")
 
 
 def build_month_matrix(ws, df):
