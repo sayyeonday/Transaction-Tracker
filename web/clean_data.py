@@ -30,7 +30,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 MOVE_PATTERNS = [
     "E-TRANSFER", "E-TRANSFERT", "INTERNET TRANSFER", "MEMO - TRANSFER",
     "FULFILL REQUEST", "PAYMENT THANK YOU", "PAIEMEN", "TO CARD",
-    "ELECTRONIC FUNDS TRANSFER", "DEPOSIT",
+    "ELECTRONIC FUNDS TRANSFER", "DEPOSIT", "FEE REBATE",
 ]
 
 # ── The label vocabularies (also used to populate the UI dropdowns) ──
@@ -51,19 +51,19 @@ SPENDING_CATEGORIES = [
     "Entertainment", "Subscription_Software", "Subscription_Streaming",
     "Education", "Gifts_Donations", "Pets", "Kids_Family",
     # Misc
-    "Fees_Banking", "Cash_Withdrawal", "Other",
+    "Fees_Banking", "Fees_AnnualCard", "Cash_Withdrawal", "Other",
 ]
 TRANSFER_CATEGORIES = [
     "Transfer_Allowance", "Transfer_Reimbursed", "Transfer_SplitSent",
     "Transfer_Income", "Transfer_OwnAccount", "Transfer_Investment",
     "Transfer_CardPayment",
     "Income_Salary", "Income_PartTime", "Income_SideHustle",
-    "Income_Rewards", "Income_Financial", "Other",
+    "Income_Rewards", "Income_Financial", "Rebate_CardFee", "Other",
 ]
 # Labels that represent money flowing IN to the user (for the dashboard).
 INCOME_LABELS = {
     "Income_Salary", "Income_PartTime", "Income_SideHustle",
-    "Income_Rewards", "Income_Financial",
+    "Income_Rewards", "Income_Financial", "Rebate_CardFee",
     "Transfer_Allowance", "Transfer_Income", "Transfer_Reimbursed",
 }
 
@@ -106,6 +106,10 @@ DEFAULT_CATEGORIES = {
     "ARITZIA": "Shopping_Clothing", "COACH": "Shopping_Clothing", "UNIQLO": "Shopping_Clothing",
     "H&M": "Shopping_Clothing", "ZARA": "Shopping_Clothing", "LULULEMON": "Shopping_Clothing",
     "OLD NAVY": "Shopping_Clothing", "NIKE": "Shopping_Clothing", "ADIDAS": "Shopping_Clothing",
+    "GAP": "Shopping_Clothing", "ABERCROMBIE": "Shopping_Clothing", "GARAGE": "Shopping_Clothing",
+    "HOLLISTER": "Shopping_Clothing", "FOREVER 21": "Shopping_Clothing", "MARK'S": "Shopping_Clothing",
+    "SPORTING LIFE": "Shopping_Clothing", "SIMONS": "Shopping_Clothing", "BANANA REPUBLIC": "Shopping_Clothing",
+    "ROOTS": "Shopping_Clothing", "BROWNS SHOES": "Shopping_Clothing", "ALDO": "Shopping_Clothing",
     # Shopping_Beauty
     "SEPHORA": "Shopping_Beauty", "HAIR SHINE": "Shopping_Beauty", "MAC COSMETICS": "Shopping_Beauty",
     "ULTA": "Shopping_Beauty", "SALON": "Shopping_Beauty", "NAILS": "Shopping_Beauty",
@@ -162,15 +166,23 @@ DEFAULT_CATEGORIES = {
     "GREEN P": "Transport_Parking", "IMPARK": "Transport_Parking",
     # Bills_Utilities
     "HYDRO": "Bills_Utilities", "ENBRIDGE": "Bills_Utilities", "TORONTO HYDRO": "Bills_Utilities",
-    "UTILITY": "Bills_Utilities",
+    "UTILITY": "Bills_Utilities", "ALECTRA": "Bills_Utilities", "HYDRO ONE": "Bills_Utilities",
+    "EPCOR": "Bills_Utilities", "FORTISBC": "Bills_Utilities", "UNION GAS": "Bills_Utilities",
+    "REGION OF": "Bills_Utilities", "CITY OF": "Bills_Utilities", "ELECTRIC": "Bills_Utilities",
     # Bills_PhoneInternet
     "ROGERS": "Bills_PhoneInternet", "BELL CANADA": "Bills_PhoneInternet",
-    "TELUS": "Bills_PhoneInternet", "FIDO": "Bills_PhoneInternet",
-    "FREEDOM MOBILE": "Bills_PhoneInternet", "KOODO": "Bills_PhoneInternet",
-    "VIRGIN": "Bills_PhoneInternet", "CHATR": "Bills_PhoneInternet",
+    "BELL MOBILITY": "Bills_PhoneInternet", "TELUS": "Bills_PhoneInternet",
+    "FIDO": "Bills_PhoneInternet", "FREEDOM MOBILE": "Bills_PhoneInternet",
+    "KOODO": "Bills_PhoneInternet", "VIRGIN": "Bills_PhoneInternet", "CHATR": "Bills_PhoneInternet",
+    "PUBLIC MOBILE": "Bills_PhoneInternet", "LUCKY MOBILE": "Bills_PhoneInternet",
+    "TEKSAVVY": "Bills_PhoneInternet", "DISTRIBUTEL": "Bills_PhoneInternet",
+    "VIDEOTRON": "Bills_PhoneInternet", "SHAW": "Bills_PhoneInternet", "EASTLINK": "Bills_PhoneInternet",
     # Bills_Insurance
     "INSURANCE": "Bills_Insurance", "INTACT": "Bills_Insurance", "SUN LIFE": "Bills_Insurance",
-    "MANULIFE": "Bills_Insurance",
+    "MANULIFE": "Bills_Insurance", "TD INSURANCE": "Bills_Insurance", "BELAIRDIRECT": "Bills_Insurance",
+    "BELAIR DIRECT": "Bills_Insurance", "ALLSTATE": "Bills_Insurance", "AVIVA": "Bills_Insurance",
+    "DESJARDINS INSUR": "Bills_Insurance", "CAA INSUR": "Bills_Insurance", "SONNET": "Bills_Insurance",
+    "ECONOMICAL": "Bills_Insurance", "WAWANESA": "Bills_Insurance", "COOPERATORS": "Bills_Insurance",
     # Bills_Rent
     "RENT": "Bills_Rent", "PROPERTY MANAGEMENT": "Bills_Rent",
     # Health_Pharmacy
@@ -186,6 +198,9 @@ DEFAULT_CATEGORIES = {
     "PETSMART": "Pets", "PET VALU": "Pets", "PETCO": "Pets", "VETERINARY": "Pets",
     # Gifts_Donations
     "GOFUNDME": "Gifts_Donations", "DONATION": "Gifts_Donations", "RED CROSS": "Gifts_Donations",
+    # Fees_AnnualCard (the yearly card fee — kept separate so it's visible)
+    "ANNUAL FEE": "Fees_AnnualCard", "ANNUAL MEMBERSHIP": "Fees_AnnualCard",
+    "CARD FEE": "Fees_AnnualCard", "PRIMARY CARD ANNUAL": "Fees_AnnualCard",
     # Fees_Banking / Cash
     "SERVICE CHARGE": "Fees_Banking", "NETWORK TRANSACTION FEE": "Fees_Banking",
     "FX CASH": "Fees_Banking", "OVERLIMIT": "Fees_Banking", "NSF": "Fees_Banking",
@@ -198,6 +213,7 @@ DEFAULT_TRANSFERS = {
     "PAYMENT THANK YOU": "Transfer_CardPayment", "PAIEMEN": "Transfer_CardPayment",
     "TO CARD": "Transfer_CardPayment",
     "INTERNET TRANSFER": "Transfer_OwnAccount", "MEMO - TRANSFER": "Transfer_OwnAccount",
+    "FEE REBATE": "Rebate_CardFee",
 }
 
 # ── Display-only noise lists (never affect classification) ──
