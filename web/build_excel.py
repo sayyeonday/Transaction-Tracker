@@ -213,7 +213,29 @@ def _style_pie(chart):
     chart.dataLabels = DataLabelList()
     chart.dataLabels.showPercent = True
     chart.dataLabels.showLegendKey = False
+    chart.dataLabels.showVal = False
+    chart.dataLabels.showCatName = False
+    chart.dataLabels.showSerName = False
     chart.dataLabels.txPr = _rich_size(10, bold=True)
+
+
+def _spending_categories_present(df):
+    """Categories that actually have spending, largest first.
+
+    The pie was unreadable because it drew a slice (and a leader-lined label)
+    for every one of the ~35 categories, most of them $0. We resolve each
+    transaction's default category the same way the workbook does
+    (merchant → its seeded category) and keep only categories with spend, so
+    the charts plot a short, ordered list instead of every empty bucket."""
+    spend_tbl = seed_table(df, "Spending", cd.DEFAULT_CATEGORIES)
+    cat_by_merchant = dict(zip(spend_tbl["name"], spend_tbl["category"]))
+    sub = df[df["flow"] == "Spending"].copy()
+    if sub.empty:
+        return []
+    sub["cat"] = sub["merchant"].map(cat_by_merchant).fillna("Uncategorized")
+    totals = sub.groupby("cat")["debit"].sum()
+    ordered = totals[totals > 0].sort_values(ascending=False)
+    return list(ordered.index)
 
 
 def build_lists(ws):
@@ -381,42 +403,80 @@ def build_dashboard(ws, df):
     ws.column_dimensions["A"].width = 22
     ws.column_dimensions["B"].width = 22
 
-    # Charts live to the right of the tables (column D+). The two category
-    # pies are grouped first (big, since there are many categories), then the
-    # monthly bar. Pies are sized large with a right-hand legend so all
-    # categories stay readable.
-    PIE_W, PIE_H = 28, 17
+    # Chart-data helper table (far columns, out of normal view). Only the
+    # categories that actually have spending are listed, largest last so the
+    # horizontal bar shows the biggest at the top. The values stay live SUMIFS
+    # formulas, so they still recompute if the user re-categorizes.
+    present = _spending_categories_present(df)
+    chart_cats = list(reversed(present))   # ascending → largest at top of bar
+    HCAT, HALL, HMON = 24, 25, 26          # helper columns X, Y, Z
+    hdr = 2
+    ws.cell(row=hdr, column=HALL, value="All months")
+    ws.cell(row=hdr, column=HMON, value="Selected month")
+    for j, cat in enumerate(chart_cats):
+        r = hdr + 1 + j
+        ws.cell(row=r, column=HCAT, value=cat)
+        a = ws.cell(row=r, column=HALL, value=(
+            f'=SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{cat}",'
+            f'Transactions!$C:$C,"Spending")'))
+        a.number_format = MONEY_FMT
+        m = ws.cell(row=r, column=HMON, value=(
+            f'=SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{cat}",'
+            f'Transactions!$H:$H,${MONTH_CELL[0]}${MONTH_CELL[1:]},'
+            f'Transactions!$C:$C,"Spending")'))
+        m.number_format = MONEY_FMT
+    h_end = hdr + len(chart_cats)
+    n_cats = max(len(chart_cats), 1)
 
-    cat_chart = PieChart()
+    # Charts live to the right of the tables (column D+).
+    WIDE = 28
+
+    # 1) All-months breakdown — horizontal bar. A bar handles many categories
+    # far better than a pie: one row each, no overlapping labels or leader
+    # lines. Tall enough that every category label is readable.
+    cat_chart = BarChart()
+    cat_chart.type = "bar"
     _set_title(cat_chart, "Spending by category — all months", 16)
-    cat_chart.height = PIE_H
-    cat_chart.width = PIE_W
-    data = Reference(ws, min_col=2, min_row=cat_top, max_row=cat_end)
-    cats = Reference(ws, min_col=1, min_row=cat_top + 1, max_row=cat_end)
+    cat_chart.legend = None
+    cat_chart.width = WIDE
+    cat_chart.height = max(10, 0.85 * n_cats + 3)
+    data = Reference(ws, min_col=HALL, min_row=hdr, max_row=h_end)
+    cats = Reference(ws, min_col=HCAT, min_row=hdr + 1, max_row=h_end)
     cat_chart.add_data(data, titles_from_data=True)
     cat_chart.set_categories(cats)
-    _text_categories(cat_chart, list(cd.SPENDING_CATEGORIES))
-    _style_pie(cat_chart)
+    _text_categories(cat_chart, chart_cats)
+    cat_chart.dataLabels = DataLabelList()
+    cat_chart.dataLabels.showVal = True
+    cat_chart.dataLabels.numFmt = MONEY_FMT
+    cat_chart.dataLabels.txPr = _rich_size(10, bold=True)
+    cat_chart.x_axis.delete = False
+    cat_chart.y_axis.delete = False
+    cat_chart.x_axis.txPr = _rich_size(10)
+    cat_chart.y_axis.txPr = _rich_size(11)
     ws.add_chart(cat_chart, "D3")
 
+    # 2) Selected-month breakdown — pie (as requested), but only over the
+    # categories that have annual spend, so it loses the wall of $0 slices.
     pm_chart = PieChart()
     _set_title(pm_chart, "Spending by category — selected month (see cell B8)", 16)
-    pm_chart.height = PIE_H
-    pm_chart.width = PIE_W
-    pdata = Reference(ws, min_col=2, min_row=pm_top, max_row=pm_end)
-    pcats = Reference(ws, min_col=1, min_row=pm_top + 1, max_row=pm_end)
+    pm_chart.height = 17
+    pm_chart.width = WIDE
+    pdata = Reference(ws, min_col=HMON, min_row=hdr, max_row=h_end)
+    pcats = Reference(ws, min_col=HCAT, min_row=hdr + 1, max_row=h_end)
     pm_chart.add_data(pdata, titles_from_data=True)
     pm_chart.set_categories(pcats)
-    _text_categories(pm_chart, list(cd.SPENDING_CATEGORIES))
+    _text_categories(pm_chart, chart_cats)
     _style_pie(pm_chart)
-    ws.add_chart(pm_chart, "D39")
+    pm_row = max(int(0.85 * n_cats + 3) + 6, 26)
+    ws.add_chart(pm_chart, f"D{pm_row}")
 
+    # 3) Monthly spending over time — column chart.
     mon_chart = BarChart()
     mon_chart.type = "col"
     _set_title(mon_chart, "Monthly spending", 16)
     mon_chart.legend = None
     mon_chart.height = 11
-    mon_chart.width = PIE_W
+    mon_chart.width = WIDE
     mdata = Reference(ws, min_col=2, min_row=mon_top, max_row=mon_end)
     mcats = Reference(ws, min_col=1, min_row=mon_top + 1, max_row=mon_end)
     mon_chart.add_data(mdata, titles_from_data=True)
@@ -426,7 +486,7 @@ def build_dashboard(ws, df):
     mon_chart.y_axis.delete = False
     mon_chart.x_axis.txPr = _rich_size(10)
     mon_chart.y_axis.txPr = _rich_size(10)
-    ws.add_chart(mon_chart, "D75")
+    ws.add_chart(mon_chart, f"D{pm_row + 36}")
 
 
 def build_month_matrix(ws, df):
