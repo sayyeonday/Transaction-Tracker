@@ -79,6 +79,7 @@ DEFAULT_CATEGORIES = {
     "SUPER C": "Food_Groceries", "SAVE-ON-FOODS": "Food_Groceries", "SAVE ON FOODS": "Food_Groceries",
     "IGA": "Food_Groceries", "FOODLAND": "Food_Groceries", "LONGO": "Food_Groceries",
     "GIANT TIGER": "Food_Groceries", "ZEHRS": "Food_Groceries",
+    "NOFRILLS": "Food_Groceries", "'S NF": "Food_Groceries",  # No Frills franchises: "<owner>'S NF"
     # Food_Cafe
     "TIM HORTONS": "Food_Cafe", "STARBUCKS": "Food_Cafe", "CAFE": "Food_Cafe",
     "CREPE": "Food_Cafe", "TEN REN": "Food_Cafe", "NAYAX": "Food_Cafe",
