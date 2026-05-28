@@ -6,94 +6,296 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Expense Tracker</title>
   <style>
-    :root { --bg:#0f172a; --card:#1e293b; --ink:#e2e8f0; --muted:#94a3b8;
-            --accent:#38bdf8; --ok:#34d399; --border:#334155; }
+    :root {
+      --bg:#eef2f7; --ink:#0f172a; --muted:#64748b; --border:#e5e7eb;
+      --green:#16a34a; --green-dark:#15803d;
+      --ok:#16a34a; --err:#dc2626;
+    }
     * { box-sizing: border-box; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
            background:var(--bg); color:var(--ink); line-height:1.5; }
-    .wrap { max-width:720px; margin:0 auto; padding:40px 20px 80px; }
-    h1 { font-size:2rem; margin:0 0 6px; }
-    .sub { color:var(--muted); margin:0 0 24px; }
-    .privacy { background:rgba(52,211,153,.1); border:1px solid rgba(52,211,153,.4);
-               border-radius:10px; padding:12px 16px; font-size:.92rem; margin-bottom:28px; }
-    .privacy b { color:var(--ok); }
-    .privacy .note { display:block; margin-top:8px; color:var(--ink); opacity:.8; font-size:.84rem; }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:12px;
-            padding:20px; margin-bottom:18px; }
-    .card h2 { font-size:1rem; margin:0 0 4px; }
-    .card p { color:var(--muted); font-size:.88rem; margin:0 0 12px; }
-    .optional { color:var(--muted); font-weight:400; font-size:.8rem; }
-    input[type=file] { width:100%; color:var(--ink); font-size:.9rem; }
-    input[type=file]::file-selector-button { background:#334155; color:var(--ink);
-      border:0; padding:8px 14px; border-radius:8px; margin-right:12px; cursor:pointer; }
-    button.go { width:100%; background:var(--accent); color:#03263a; border:0; padding:14px;
-      font-size:1.05rem; font-weight:700; border-radius:10px; cursor:pointer; }
-    button.go:disabled { background:#475569; color:#94a3b8; cursor:not-allowed; }
-    #status { margin-top:16px; font-size:.92rem; min-height:1.4em; }
-    #status.err { color:#f87171; }
-    #status.ok { color:var(--ok); }
-    a.download { display:inline-block; margin-top:14px; background:var(--ok); color:#053522;
-      text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:700; }
-    .spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--muted);
-      border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite;
+    .wrap { max-width:880px; margin:0 auto; padding:36px 18px 56px; }
+    .app { background:linear-gradient(160deg,#ffffff 0%,#f3f9ff 55%,#eefaf1 100%);
+           border:1px solid var(--border); border-radius:26px; padding:30px 30px 26px;
+           box-shadow:0 18px 50px rgba(15,23,42,.08); }
+
+    /* Header + hero */
+    .header { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
+    .head-text { flex:1 1 320px; }
+    .title { display:flex; align-items:center; gap:12px; margin:0 0 8px; }
+    h1 { font-size:2.3rem; margin:0; letter-spacing:-.02em; }
+    .title svg { color:var(--green); flex:none; }
+    .sub { color:#475569; margin:0; font-size:1.02rem; max-width:30ch; }
+    .hero { flex:none; width:300px; max-width:42%; }
+    @media (max-width:640px){ .hero { display:none; } h1 { font-size:1.9rem; } }
+
+    /* Privacy banner */
+    .privacy { display:flex; gap:14px; align-items:flex-start;
+               background:rgba(220,252,231,.55); border:1px solid #bbf7d0;
+               border-radius:18px; padding:16px 18px; margin:22px 0 24px; font-size:.96rem; }
+    .shield { flex:none; width:44px; height:44px; border-radius:50%; display:flex;
+              align-items:center; justify-content:center; color:#fff;
+              background:linear-gradient(135deg,#22c55e,#15803d);
+              box-shadow:0 5px 12px rgba(22,163,74,.35); }
+    .privacy b { color:var(--green-dark); }
+    .privacy .lead { margin:0; }
+    .privacy .note { display:block; margin-top:8px; color:#334155; font-size:.83rem; opacity:.92; }
+
+    /* Section cards */
+    .card { display:flex; align-items:center; gap:20px; background:#fff;
+            border:1px solid var(--border); border-radius:20px; padding:20px 22px;
+            margin-bottom:16px; box-shadow:0 6px 18px rgba(15,23,42,.05); }
+    .badge { flex:none; width:60px; height:60px; border-radius:50%; display:flex;
+             align-items:center; justify-content:center; background:var(--c-soft); color:var(--c); }
+    .meta { flex:1 1 210px; min-width:180px; }
+    .meta h2 { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+               font-size:1.15rem; margin:0 0 5px; font-weight:700; }
+    .meta p { color:var(--muted); font-size:.9rem; margin:0; }
+    .pill { font-size:.68rem; font-weight:700; letter-spacing:.02em; color:var(--c);
+            background:var(--c-soft); border-radius:999px; padding:2px 9px; }
+
+    .drop { flex:1 1 320px; position:relative; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; gap:3px; min-height:104px;
+            padding:16px; text-align:center; border:2px dashed var(--c); border-radius:16px;
+            background:var(--c-soft); cursor:pointer; transition:filter .15s; }
+    .drop:hover { filter:brightness(.97); }
+    .drop input[type=file] { position:absolute; inset:0; width:100%; height:100%;
+            opacity:0; cursor:pointer; }
+    .drop-body { display:flex; flex-direction:column; align-items:center; gap:3px;
+            pointer-events:none; }
+    .drop-body > svg { color:var(--c); margin-bottom:3px; }
+    .drop-text { font-weight:700; color:#1f2937; font-size:.96rem; }
+    .drop-sub { color:var(--muted); font-size:.82rem; }
+    .drop.filled .drop-text { color:var(--c); }
+    @media (max-width:640px){ .card { flex-direction:column; align-items:stretch; gap:14px; }
+            .meta { text-align:center; } .meta h2 { justify-content:center; } }
+
+    .c-green  { --c:#16a34a; --c-soft:#f0fdf4; }
+    .c-purple { --c:#7c3aed; --c-soft:#f5f3ff; }
+    .c-teal   { --c:#0d9488; --c-soft:#f0fdfa; }
+    .c-blue   { --c:#2563eb; --c-soft:#eff6ff; }
+
+    /* Build button */
+    button.go { position:relative; width:100%; display:flex; align-items:center;
+      justify-content:center; gap:12px; background:linear-gradient(180deg,#1ca84e,#15803d);
+      color:#fff; border:0; padding:18px; font-size:1.18rem; font-weight:700;
+      border-radius:999px; cursor:pointer; margin-top:8px;
+      box-shadow:0 10px 24px rgba(21,128,61,.35); transition:filter .15s; }
+    button.go:hover:not(:disabled) { filter:brightness(1.05); }
+    button.go:disabled { background:#cbd5e1; color:#fff; box-shadow:none; cursor:not-allowed; }
+    .b-arrow { position:absolute; right:24px; }
+
+    #status { margin-top:16px; font-size:.92rem; min-height:1.4em; text-align:center; }
+    #status.err { color:var(--err); }
+    #status.ok { color:var(--ok); font-weight:600; }
+    a.download { display:inline-block; margin-top:14px; background:var(--green); color:#fff;
+      text-decoration:none; padding:12px 22px; border-radius:999px; font-weight:700; }
+    .spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,.5);
+      border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite;
       vertical-align:-2px; margin-right:8px; }
     @keyframes spin { to { transform:rotate(360deg); } }
-    .steps { color:var(--muted); font-size:.85rem; margin-top:30px; }
+
+    .footer { display:flex; align-items:center; justify-content:center; flex-wrap:wrap;
+      gap:8px; margin-top:18px; color:var(--muted); font-size:.86rem; }
+    .footer svg { color:var(--green); vertical-align:-2px; }
+    .footer .dot { color:#cbd5e1; }
+    .steps { color:var(--muted); font-size:.85rem; margin-top:22px; padding-left:20px; }
     .steps li { margin-bottom:6px; }
-    code { background:#0b1220; padding:1px 6px; border-radius:5px; }
+    code { background:#eef2f7; color:#334155; padding:1px 6px; border-radius:5px; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Expense Tracker</h1>
-    <p class="sub">Turn your CIBC or BMO CSV exports into a tidy Excel workbook you can categorize and chart.</p>
+    <div class="app">
+      <div class="header">
+        <div class="head-text">
+          <div class="title">
+            <h1>Expense Tracker</h1>
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+            </svg>
+          </div>
+          <p class="sub">Turn your CIBC or BMO CSV exports into a tidy Excel workbook you can categorize and chart.</p>
+        </div>
 
-    <div class="privacy">
-      <b>100% private.</b> Everything runs inside <i>your</i> browser. Your transactions are
-      never uploaded, stored, or sent anywhere — when you close this tab, nothing remains.
-      <span class="note">One thing stays with you: the <code>finance.xlsx</code> you download is
-      <b>unencrypted</b> and holds your financial details. Keep it somewhere safe and out of
-      shared or auto-synced folders — once it’s on your device, protecting it is your
-      responsibility.</span>
+        <svg class="hero" viewBox="0 0 340 240" fill="none" aria-hidden="true">
+          <path d="M250 25c45-8 80 18 80 60 0 50-40 70-95 70-40 0-90 20-120-15-22-26-8-70 35-95 30-17 55-13 100-20z" fill="#dcfce7" opacity=".6"/>
+          <!-- spreadsheet -->
+          <rect x="135" y="55" width="170" height="135" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+          <rect x="135" y="55" width="170" height="26" rx="12" fill="#f0fdf4"/>
+          <rect x="135" y="69" width="170" height="12" fill="#f0fdf4"/>
+          <line x1="135" y1="81" x2="305" y2="81" stroke="#e2e8f0" stroke-width="1.5"/>
+          <line x1="135" y1="108" x2="305" y2="108" stroke="#eef2f7" stroke-width="1.5"/>
+          <line x1="135" y1="135" x2="305" y2="135" stroke="#eef2f7" stroke-width="1.5"/>
+          <line x1="135" y1="162" x2="305" y2="162" stroke="#eef2f7" stroke-width="1.5"/>
+          <line x1="192" y1="55" x2="192" y2="190" stroke="#eef2f7" stroke-width="1.5"/>
+          <rect x="200" y="90" width="44" height="9" rx="3" fill="#86efac"/>
+          <rect x="252" y="90" width="44" height="9" rx="3" fill="#bbf7d0"/>
+          <rect x="200" y="117" width="44" height="9" rx="3" fill="#bbf7d0"/>
+          <rect x="252" y="117" width="44" height="9" rx="3" fill="#86efac"/>
+          <rect x="200" y="144" width="44" height="9" rx="3" fill="#86efac"/>
+          <rect x="252" y="171" width="44" height="9" rx="3" fill="#bbf7d0"/>
+          <!-- excel file badge -->
+          <rect x="160" y="40" width="34" height="40" rx="6" fill="#16a34a"/>
+          <path d="M170 54l14 14M184 54l-14 14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+          <!-- bar chart card -->
+          <rect x="60" y="150" width="92" height="72" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+          <rect x="74" y="188" width="12" height="22" rx="3" fill="#86efac"/>
+          <rect x="92" y="176" width="12" height="34" rx="3" fill="#22c55e"/>
+          <rect x="110" y="166" width="12" height="44" rx="3" fill="#16a34a"/>
+          <rect x="128" y="182" width="12" height="28" rx="3" fill="#86efac"/>
+          <!-- donut -->
+          <g transform="translate(300,178)">
+            <circle r="26" fill="none" stroke="#bbf7d0" stroke-width="13"/>
+            <circle r="26" fill="none" stroke="#16a34a" stroke-width="13" stroke-dasharray="58 105" transform="rotate(-90)"/>
+            <circle r="26" fill="none" stroke="#0d9488" stroke-width="13" stroke-dasharray="34 129" stroke-dashoffset="-58" transform="rotate(-90)"/>
+          </g>
+          <!-- sparkles -->
+          <path d="M118 36l2.4 6.4 6.4 2.4-6.4 2.4-2.4 6.4-2.4-6.4-6.4-2.4 6.4-2.4z" fill="#86efac"/>
+          <path d="M322 70l1.8 4.8 4.8 1.8-4.8 1.8-1.8 4.8-1.8-4.8-4.8-1.8 4.8-1.8z" fill="#22c55e"/>
+          <path d="M312 140l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5z" fill="#bbf7d0"/>
+        </svg>
+      </div>
+
+      <div class="privacy">
+        <span class="shield">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect width="14" height="9" x="5" y="11" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>
+          </svg>
+        </span>
+        <div>
+          <p class="lead"><b>100% private.</b> Everything runs inside <i>your</i> browser. Your
+            transactions are <b>never</b> uploaded, stored, or sent anywhere — when you close this
+            tab, nothing remains.</p>
+          <span class="note">One thing stays with you: the <code>finance.xlsx</code> you download is
+            <b>unencrypted</b> and holds your financial details. Keep it somewhere safe and out of
+            shared or auto-synced folders — once it’s on your device, protecting it is your
+            responsibility.</span>
+        </div>
+      </div>
+
+      <div class="card c-green">
+        <span class="badge">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>
+          </svg>
+        </span>
+        <div class="meta">
+          <h2>1. Credit card exports</h2>
+          <p>Upload one or more CIBC or BMO credit-card CSV file(s).</p>
+        </div>
+        <label class="drop">
+          <input type="file" id="credit" accept=".csv" multiple />
+          <span class="drop-body">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/>
+            </svg>
+            <span class="drop-text">Drag &amp; drop or click to upload</span>
+            <span class="drop-sub">CIBC or BMO credit-card CSV file(s)</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="card c-purple">
+        <span class="badge">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>
+          </svg>
+        </span>
+        <div class="meta">
+          <h2>2. Debit / chequing exports</h2>
+          <p>Upload your CIBC or BMO debit / chequing CSV file(s).</p>
+        </div>
+        <label class="drop">
+          <input type="file" id="debit" accept=".csv" multiple />
+          <span class="drop-body">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/>
+            </svg>
+            <span class="drop-text">Drag &amp; drop or click to upload</span>
+            <span class="drop-sub">CIBC or BMO debit / chequing CSV file(s)</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="card c-teal">
+        <span class="badge">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
+          </svg>
+        </span>
+        <div class="meta">
+          <h2>3. Wealthsimple activity <span class="pill">OPTIONAL</span></h2>
+          <p>Upload your Wealthsimple <i>activities</i> export(s). Buys, sells and account transfers
+            are kept out of spending and income; dividends and interest count as income, fees as spending.</p>
+        </div>
+        <label class="drop">
+          <input type="file" id="wealthsimple" accept=".csv" multiple />
+          <span class="drop-body">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/>
+            </svg>
+            <span class="drop-text">Drag &amp; drop or click to upload</span>
+            <span class="drop-sub">Wealthsimple activities CSV file(s)</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="card c-blue">
+        <span class="badge">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+          </svg>
+        </span>
+        <div class="meta">
+          <h2>4. Previous workbook <span class="pill">OPTIONAL</span></h2>
+          <p>Already categorized a workbook? Upload it here to keep your categories and settings.</p>
+        </div>
+        <label class="drop">
+          <input type="file" id="prior" accept=".xlsx" />
+          <span class="drop-body">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/>
+            </svg>
+            <span class="drop-text">Drag &amp; drop or click to upload</span>
+            <span class="drop-sub">Previously built finance.xlsx</span>
+          </span>
+        </label>
+      </div>
+
+      <button class="go" id="build" disabled>
+        <span class="spinner"></span>Loading engine…
+      </button>
+      <div id="status"></div>
+
+      <div class="footer">
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect width="14" height="9" x="5" y="11" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          100% private</span>
+        <span class="dot">•</span>
+        <span>Nothing leaves your device</span>
+        <span class="dot">•</span>
+        <span>Your data stays with you</span>
+      </div>
+
+      <ol class="steps">
+        <li>Pick your CSV files above and click <b>Build my workbook</b>.</li>
+        <li>Open the downloaded <code>finance.xlsx</code> in Excel.</li>
+        <li>On the <b>Merchants</b> and <b>Names</b> tabs, choose a category from the dropdowns.</li>
+        <li>The <b>Overview</b> and <b>Monthly</b> tabs update automatically — no internet needed.</li>
+      </ol>
     </div>
-
-    <div class="card">
-      <h2>1. Credit card exports</h2>
-      <p>Your CIBC or BMO credit-card CSV file(s). You can select more than one.</p>
-      <input type="file" id="credit" accept=".csv" multiple />
-    </div>
-
-    <div class="card">
-      <h2>2. Debit / chequing exports</h2>
-      <p>Your CIBC or BMO debit / chequing CSV file(s).</p>
-      <input type="file" id="debit" accept=".csv" multiple />
-    </div>
-
-    <div class="card">
-      <h2>3. Wealthsimple activity <span class="optional">— optional</span></h2>
-      <p>Your Wealthsimple <i>activities</i> export(s). Buys, sells and account
-        transfers are kept out of spending and income; dividends and interest
-        count as income, fees as spending.</p>
-      <input type="file" id="wealthsimple" accept=".csv" multiple />
-    </div>
-
-    <div class="card">
-      <h2>4. Previous workbook <span class="optional">— optional</span></h2>
-      <p>Already categorized a workbook before? Add it here and your category choices are kept.</p>
-      <input type="file" id="prior" accept=".xlsx" />
-    </div>
-
-    <button class="go" id="build" disabled>
-      <span class="spinner"></span>Loading engine…
-    </button>
-    <div id="status"></div>
-
-    <ol class="steps">
-      <li>Pick your CSV files above and click <b>Build my workbook</b>.</li>
-      <li>Open the downloaded <code>finance.xlsx</code> in Excel.</li>
-      <li>On the <b>Merchants</b> and <b>Names</b> tabs, choose a category from the dropdowns.</li>
-      <li>The <b>Overview</b> and <b>Monthly</b> tabs update automatically — no internet needed.</li>
-    </ol>
   </div>
 
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"

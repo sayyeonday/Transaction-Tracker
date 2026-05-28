@@ -6,6 +6,15 @@ const statusEl = $("status");
 
 let pyodide = null;
 
+// Trusted markup for the ready-state button: sparkle + label + arrow.
+const BUILD_LABEL =
+  '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+  '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>' +
+  "Build my workbook" +
+  '<svg class="b-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>';
+
 // Trusted markup only (spinners, the download link with a blob: URL).
 function setStatus(msg, kind = "") {
   statusEl.className = kind;
@@ -61,7 +70,7 @@ import io, build_excel
 `);
 
     buildBtn.disabled = false;
-    buildBtn.innerHTML = "Build my workbook";
+    buildBtn.innerHTML = BUILD_LABEL;
     setStatusText("Ready — your files stay on this device.", "ok");
   } catch (e) {
     console.error(e);
@@ -123,6 +132,29 @@ build_excel.build_bytes(_specs, _pb)
     buildBtn.disabled = false;
   }
 }
+
+// Reflect the chosen file(s) inside each drag-or-click dropzone. The native
+// input is a transparent overlay, so its filename label is hidden — mirror it
+// here with textContent (never innerHTML) so a filename can't inject markup.
+function wireDropLabel(id) {
+  const input = $(id);
+  if (!input) return;
+  const drop = input.closest(".drop");
+  const text = drop.querySelector(".drop-text");
+  const dflt = text.textContent;
+  input.addEventListener("change", () => {
+    const files = Array.from(input.files);
+    if (files.length === 0) {
+      text.textContent = dflt;
+      drop.classList.remove("filled");
+      return;
+    }
+    const names = files.map((f) => f.name).join(", ");
+    text.textContent = files.length === 1 ? names : files.length + " files: " + names;
+    drop.classList.add("filled");
+  });
+}
+["credit", "debit", "wealthsimple", "prior"].forEach(wireDropLabel);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
