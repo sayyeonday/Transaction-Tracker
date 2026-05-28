@@ -75,7 +75,10 @@ DEFAULT_CATEGORIES = {
     "SUPERSTORE": "Food_Groceries", "TASC": "Food_Groceries", "LOBLAW": "Food_Groceries",
     "METRO": "Food_Groceries", "SOBEYS": "Food_Groceries", "FRESHCO": "Food_Groceries",
     "FOOD BASICS": "Food_Groceries", "T&T": "Food_Groceries", "H MART": "Food_Groceries",
-    "GALLERIA": "Food_Groceries", "FARM BOY": "Food_Groceries",
+    "GALLERIA": "Food_Groceries", "FARM BOY": "Food_Groceries", "SAFEWAY": "Food_Groceries",
+    "SUPER C": "Food_Groceries", "SAVE-ON-FOODS": "Food_Groceries", "SAVE ON FOODS": "Food_Groceries",
+    "IGA": "Food_Groceries", "FOODLAND": "Food_Groceries", "LONGO": "Food_Groceries",
+    "GIANT TIGER": "Food_Groceries", "ZEHRS": "Food_Groceries",
     # Food_Cafe
     "TIM HORTONS": "Food_Cafe", "STARBUCKS": "Food_Cafe", "CAFE": "Food_Cafe",
     "CREPE": "Food_Cafe", "TEN REN": "Food_Cafe", "NAYAX": "Food_Cafe",
@@ -204,7 +207,9 @@ DEFAULT_CATEGORIES = {
     # Fees_Banking / Cash
     "SERVICE CHARGE": "Fees_Banking", "NETWORK TRANSACTION FEE": "Fees_Banking",
     "FX CASH": "Fees_Banking", "OVERLIMIT": "Fees_Banking", "NSF": "Fees_Banking",
-    "ATM WITHDRAWAL": "Cash_Withdrawal",
+    "ATM WITHDRAWAL": "Cash_Withdrawal", "ABM WITHDRAWAL": "Cash_Withdrawal",
+    "CASH WITHDRAWAL": "Cash_Withdrawal", "CASH ADVANCE": "Cash_Withdrawal",
+    "WITHDRAWAL": "Cash_Withdrawal",
 }
 
 # Only the mechanical movements are pre-filled. Named e-transfers / deposits
