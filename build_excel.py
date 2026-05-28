@@ -63,7 +63,7 @@ def _finalize(df):
 
 def ingest_frames(file_specs):
     """file_specs: list of (path-or-file-like, source) -> classified DataFrame."""
-    frames = [cd.read_cibc_csv(src, source) for src, source in file_specs]
+    frames = [cd.read_bank_csv(src, source) for src, source in file_specs]
     if not frames:
         return pd.DataFrame()
     return _finalize(pd.concat(frames, ignore_index=True))

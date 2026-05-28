@@ -1,8 +1,8 @@
 # Expense Tracker
 
-Turn your CIBC bank CSV exports into a tidy Excel workbook that shows **where your
-money goes** and **how much comes in** — with click-to-categorize dropdowns and
-charts that update themselves.
+Turn your **CIBC or BMO** bank CSV exports into a tidy Excel workbook that shows
+**where your money goes** and **how much comes in** — with click-to-categorize
+dropdowns and charts that update themselves. The bank is detected automatically.
 
 No accounts, no internet, no AI. Your data stays with you.
 
@@ -35,7 +35,7 @@ fetch its files.)
 
 ```bash
 pip install -r requirements.txt
-# put your CIBC CSV exports in:  credit/  and  debit/
+# put your CIBC or BMO CSV exports in:  credit/  and  debit/
 python3 build_excel.py
 ```
 
@@ -43,15 +43,26 @@ This writes `finance.xlsx` next to the script.
 
 ---
 
-## How to get your CIBC CSVs
+## How to get your CSVs
 
-In CIBC online banking, open an account, choose **Download transactions**, and
-pick **CSV**. Do this for each card/account. The files have no header row and
-look like:
+In online banking, open an account, choose **Download transactions**, and pick
+**CSV**. Do this for each card/account. The tool detects which bank a file came
+from automatically — no need to tell it.
+
+**CIBC** files have no header row and look like:
 
 ```
 2026-05-26,"WAL-MART SUPERCENTER#1234 ANYTOWN, ON",4.50,,1234********5678
 2026-05-26,Internet Banking E-TRANSFER 000000000000 JANE DOE,,50.00
+```
+
+**BMO** files have a header row and one signed amount column (a purchase is
+positive, a payment received is negative):
+
+```
+Item #,Card #,Transaction Date,Posting Date,Transaction Amount,Description
+1,1234********5678,20260526,20260527,4.50,"WAL-MART SUPERCENTER ANYTOWN, ON"
+2,1234********5678,20260518,20260519,-816.19,PAYMENT RECEIVED - THANK YOU
 ```
 
 ---
@@ -113,7 +124,7 @@ web/             # the static website (deployable as-is)
   main.js
   clean_data.py     # copies used by the site
   build_excel.py
-credit/  debit/  # put your CIBC CSV exports here for the local script
+credit/  debit/  # put your CIBC or BMO CSV exports here for the local script
 requirements.txt
 ```
 

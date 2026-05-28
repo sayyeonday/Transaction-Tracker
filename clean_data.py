@@ -19,6 +19,7 @@ build_excel.py imports it to produce finance.xlsx, where the user assigns the
 final categories via dropdowns. No internet or AI is used at any point.
 """
 
+import csv
 import os
 import re
 import pandas as pd
@@ -131,15 +132,44 @@ PREFIX_PATTERNS = [
 
 
 # ── 1. Read CSVs ───────────────────────────────────────────────
-def read_cibc_csv(path, source):
-    """CIBC CSVs have no header and 4-5 ragged columns, so map them manually."""
-    raw = pd.read_csv(path, header=None, dtype=str, keep_default_na=False)
+def read_bank_csv(path, source):
+    """Read a CIBC or BMO transaction export into date/description/debit/credit.
+
+    Auto-detects the bank: BMO files carry a header row (often after a preamble
+    line), CIBC files have neither. Both are parsed with the csv module so
+    ragged rows and quoted commas can't break the import."""
+    rows = _read_rows(path)
+    hdr = _bmo_header_index(rows)
+    if hdr is not None:
+        return _parse_bmo(rows, hdr, source)
+    return _parse_cibc(rows, source)
+
+
+def _read_rows(path):
+    """The CSV as a list of cell-lists, accepting a path or a file-like."""
+    if hasattr(path, "read"):           # file-like (StringIO from the website)
+        return list(csv.reader(path))
+    with open(path, newline="") as f:   # filesystem path (local CLI)
+        return list(csv.reader(f))
+
+
+def _clean(s):
+    """Trim whitespace and one surrounding pair of quotes (BMO wraps cells)."""
+    s = (s or "").strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in "'\"":
+        s = s[1:-1].strip()
+    return s
+
+
+def _parse_cibc(rows, source):
+    """CIBC: no header; columns are date, description, debit, credit, [card]."""
     records = []
-    for row in raw.itertuples(index=False):
-        cells = list(row)
+    for cells in rows:
+        if not cells or not _clean(cells[0]):
+            continue
         records.append({
-            "date": cells[0].strip(),
-            "description": cells[1].strip(),
+            "date": _clean(cells[0]),
+            "description": _clean(cells[1]) if len(cells) > 1 else "",
             "debit": _to_float(cells[2]) if len(cells) > 2 else 0.0,   # money out
             "credit": _to_float(cells[3]) if len(cells) > 3 else 0.0,  # money in
             "source": source,
@@ -147,8 +177,54 @@ def read_cibc_csv(path, source):
     return pd.DataFrame(records)
 
 
+def _bmo_header_index(rows):
+    """Index of the BMO header row, or None if this isn't a BMO export."""
+    for i, cells in enumerate(rows):
+        cleaned = [_clean(c).lower() for c in cells]
+        if "transaction date" in cleaned and "description" in cleaned:
+            return i
+    return None
+
+
+def _parse_bmo(rows, hdr, source):
+    """BMO: a header names the columns and there is one signed Transaction
+    Amount column — a purchase is POSITIVE (money out), a payment received is
+    NEGATIVE (money in)."""
+    header = [_clean(c).lower() for c in rows[hdr]]
+
+    def col(*needles):
+        for idx, name in enumerate(header):
+            if all(n in name for n in needles):
+                return idx
+        return None
+
+    i_date = col("transaction", "date")
+    i_amt = col("transaction", "amount")
+    i_desc = col("description")
+    if i_date is None or i_amt is None:
+        return pd.DataFrame()
+    need = max(i for i in (i_date, i_amt, i_desc) if i is not None)
+
+    records = []
+    for cells in rows[hdr + 1:]:
+        if len(cells) <= need:
+            continue
+        date = _clean(cells[i_date])
+        if not date:
+            continue
+        amt = _to_float(cells[i_amt])
+        records.append({
+            "date": date,
+            "description": _clean(cells[i_desc]) if i_desc is not None else "",
+            "debit": amt if amt > 0 else 0.0,     # purchase (+) = money out
+            "credit": -amt if amt < 0 else 0.0,   # payment received (-) = money in
+            "source": source,
+        })
+    return pd.DataFrame(records)
+
+
 def _to_float(s):
-    s = (s or "").strip().replace(",", "")
+    s = _clean(s).replace("$", "").replace(",", "")
     try:
         return float(s)
     except ValueError:
