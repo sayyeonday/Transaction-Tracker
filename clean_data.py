@@ -281,12 +281,19 @@ PREFIX_PATTERNS = [
 
 # ── 1. Read CSVs ───────────────────────────────────────────────
 def read_bank_csv(path, source):
-    """Read a CIBC or BMO transaction export into date/description/debit/credit.
+    """Read a CIBC / BMO bank export or a Wealthsimple activity export into
+    date/description/debit/credit.
 
-    Auto-detects the bank: BMO files carry a header row (often after a preamble
-    line), CIBC files have neither. Both are parsed with the csv module so
-    ragged rows and quoted commas can't break the import."""
+    Auto-detects the format by its header: Wealthsimple carries a distinctive
+    column set, BMO files carry a header row (often after a preamble line), and
+    CIBC files have neither. A detected Wealthsimple file is always stamped
+    source='wealthsimple' regardless of which upload slot it came from, so its
+    investment-aware classification kicks in. All are parsed with the csv module
+    so ragged rows and quoted commas can't break the import."""
     rows = _read_rows(path)
+    ws_hdr = _wealthsimple_header_index(rows)
+    if ws_hdr is not None:
+        return _parse_wealthsimple(rows, ws_hdr)
     hdr = _bmo_header_index(rows)
     if hdr is not None:
         return _parse_bmo(rows, hdr, source)
@@ -396,6 +403,67 @@ def _parse_bmo(rows, hdr, source):
     return pd.DataFrame(records)
 
 
+def _wealthsimple_header_index(rows):
+    """Index of the Wealthsimple activities header row, or None.
+
+    Wealthsimple exports a single header row with this distinctive column set
+    (transaction_date ... net_cash_amount). We require the few columns we
+    actually rely on so a stray bank file can't be misread as Wealthsimple."""
+    need = {"transaction_date", "activity_type", "net_cash_amount"}
+    for i, cells in enumerate(rows):
+        cleaned = {_clean(c).lower() for c in cells}
+        if need <= cleaned:
+            return i
+    return None
+
+
+def _parse_wealthsimple(rows, hdr):
+    """Wealthsimple activities export -> date/description/debit/credit.
+
+    The cash impact is taken from net_cash_amount; its in/out direction is read
+    from the 'direction' column when present and falls back to the amount's
+    sign, so the parser is robust whether the export signs net_cash_amount or
+    reports a magnitude alongside a direction. The description is rebuilt as
+    "<ACTIVITY_TYPE> <sub_type> <symbol> <name>" so classify_flow can recover
+    the activity type later (even after a re-import) from its first token."""
+    header = [_clean(c).lower() for c in rows[hdr]]
+    idx = {name: k for k, name in enumerate(header)}
+
+    def g(cells, key):
+        k = idx.get(key)
+        return _clean(cells[k]) if k is not None and k < len(cells) else ""
+
+    records = []
+    for cells in rows[hdr + 1:]:
+        if not cells:
+            continue
+        date = g(cells, "transaction_date")
+        if not date:
+            continue
+        amt = _to_float(g(cells, "net_cash_amount"))
+        direction = g(cells, "direction").lower()
+        if direction in ("debit", "out", "outflow"):
+            out = True
+        elif direction in ("credit", "in", "inflow"):
+            out = False
+        else:
+            out = amt < 0
+        mag = abs(amt)
+        debit, credit = (mag, 0.0) if out else (0.0, mag)
+        atype = g(cells, "activity_type").upper()
+        parts = [atype, g(cells, "activity_sub_type"),
+                 g(cells, "symbol"), g(cells, "name")]
+        desc = " ".join(p for p in parts if p) or "WEALTHSIMPLE"
+        records.append({
+            "date": date,
+            "description": desc,
+            "debit": debit,
+            "credit": credit,
+            "source": "wealthsimple",
+        })
+    return pd.DataFrame(records)
+
+
 def _to_float(s):
     s = _clean(s).replace("$", "").replace(",", "")
     try:
@@ -449,6 +517,54 @@ def apply_label(desc, mapping):
         if len(kw) > len(best) and _kw_match(kw, u):
             best, matched = kw, label
     return matched if best else "Uncategorized"
+
+
+# ── Wealthsimple: activity_type -> (flow, seed category) ───────────
+# Investment moves (deposits, withdrawals, buys, sells) are kept OUT of
+# spending and income — they are your own money relocating or converting to
+# assets. Dividends / interest are income; account & management fees are real
+# spending. Unknown activity types fall back to a transfer bucket so a new
+# Wealthsimple activity can never silently inflate your spending.
+WS_ACTIVITY = {
+    "DEPOSIT": ("Transfer", "Transfer_OwnAccount"),
+    "WITHDRAWAL": ("Transfer", "Transfer_OwnAccount"),
+    "INTERNAL_TRANSFER": ("Transfer", "Transfer_OwnAccount"),
+    "INSTITUTIONAL_TRANSFER": ("Transfer", "Transfer_OwnAccount"),
+    "TRANSFER_IN": ("Transfer", "Transfer_OwnAccount"),
+    "TRANSFER_OUT": ("Transfer", "Transfer_OwnAccount"),
+    "FUNDS_CONVERSION": ("Transfer", "Transfer_OwnAccount"),
+    "BUY": ("Transfer", "Transfer_Investment"),
+    "SELL": ("Transfer", "Transfer_Investment"),
+    "DIVIDEND": ("Transfer", "Income_Financial"),
+    "INTEREST": ("Transfer", "Income_Financial"),
+    "FPL_INTEREST": ("Transfer", "Income_Financial"),
+    "REFUND": ("Transfer", "Transfer_Reimbursed"),
+    "REIMBURSEMENT": ("Transfer", "Transfer_Reimbursed"),
+    "REFERRAL": ("Transfer", "Income_Rewards"),
+    "AFFILIATE": ("Transfer", "Income_Rewards"),
+    "PROMOTION": ("Transfer", "Income_Rewards"),
+    "BONUSPAYMENT": ("Transfer", "Income_Rewards"),
+    "FEE": ("Spending", "Fees_Banking"),
+    "MANAGEMENT_FEE": ("Spending", "Fees_Banking"),
+    "WITHHOLDING_TAX": ("Spending", "Fees_Banking"),
+    "NON_RESIDENT_TAX": ("Spending", "Fees_Banking"),
+    # Cash transfers (Wealthsimple "MoneyMovement": e-transfers in, transfers
+    # out, withdrawals to a linked bank). Genuinely ambiguous — could be your
+    # own money, a bill split, or income — so it is left blank for you to pick
+    # on the Names sheet, exactly like a bank e-transfer.
+    "MONEYMOVEMENT": ("Transfer", "Uncategorized"),
+}
+# Unknown Wealthsimple activity: keep it out of spending/income and flag it for
+# review rather than guessing.
+WS_DEFAULT = ("Transfer", "Uncategorized")
+
+
+def ws_classify(desc):
+    """(flow, seed category) for a Wealthsimple row from its first token, which
+    the parser guarantees is the ACTIVITY_TYPE. Reproducible after a re-import
+    because it depends only on the stored description."""
+    token = desc.split()[0].upper() if desc.split() else ""
+    return WS_ACTIVITY.get(token, WS_DEFAULT)
 
 
 def normalize_merchant(desc):

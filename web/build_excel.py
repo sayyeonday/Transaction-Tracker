@@ -56,7 +56,7 @@ MONEY_FMT2 = "$#,##0.00"
 
 
 # ── ingest (reuses clean_data, but writes nothing) ─────────────────
-DEDUP_KEY = ["date", "description", "debit", "credit"]
+DEDUP_KEY = ["date", "source", "description", "debit", "credit"]
 
 
 def _finalize(df):
@@ -65,7 +65,12 @@ def _finalize(df):
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
     df = df.dropna(subset=["date"])
     df["merchant"] = df["description"].apply(cd.normalize_merchant)
-    df["flow"] = df["description"].apply(cd.classify_flow)
+    df["flow"] = [
+        cd.ws_classify(r["description"])[0]
+        if r["source"] == "wealthsimple"
+        else cd.classify_flow(r["description"], r["debit"], r["credit"])
+        for _, r in df.iterrows()
+    ]
     df["amount"] = df["debit"] + df["credit"]
     return df.sort_values("date").reset_index(drop=True)
 
@@ -81,7 +86,7 @@ def ingest_frames(file_specs):
 def ingest():
     """CLI entry: read every CSV in credit/ and debit/ on disk."""
     specs = [(f, source)
-             for source in ("credit", "debit")
+             for source in ("credit", "debit", "wealthsimple")
              for f in glob.glob(os.path.join(cd.BASE, source, "*.csv"))]
     return ingest_frames(specs)
 
@@ -114,7 +119,12 @@ def seed_table(df, flow, defaults):
     """One row per unique merchant/name with a starting Category guess."""
     sub = df[df["flow"] == flow].copy()
     mapping = {k.upper(): v for k, v in defaults.items()}
-    sub["label"] = sub["description"].apply(lambda d: cd.apply_label(d, mapping))
+    sub["label"] = [
+        cd.ws_classify(r["description"])[1]
+        if r["source"] == "wealthsimple"
+        else cd.apply_label(r["description"], mapping)
+        for _, r in sub.iterrows()
+    ]
     rows = []
     for name, g in sub.groupby("merchant"):
         labelled = g["label"][g["label"] != "Uncategorized"]
@@ -367,7 +377,7 @@ def _mref(month_cell):
     return f"${month_cell[0]}${month_cell[1:]}"
 
 
-def build_overview(ws, df):
+def build_overview(ws, df, ws_lists):
     """All-time view: totals, spending by category (bar), the monthly trend,
     income, and transfers split by direction (money in vs out)."""
     months = sorted(df["date"].str.slice(0, 7).unique().tolist())
@@ -470,13 +480,15 @@ def build_overview(ws, df):
 
     # Helper table for the bar: ALL categories, ascending so the largest lands
     # at the top and unused ones sink to the bottom. Values stay live SUMIFS.
+    # Kept on the hidden Lists sheet so it never clutters (or gets edited on)
+    # the Overview; charts read from a hidden sheet without issue.
     chart_cats = list(reversed(_chart_categories(df)))
-    HCAT, HALL, hdr = 24, 25, 2
-    ws.cell(row=hdr, column=HALL, value="All months")
+    HCAT, HALL, hdr = 4, 5, 1
+    ws_lists.cell(row=hdr, column=HALL, value="All months")
     for j, cat in enumerate(chart_cats):
         r = hdr + 1 + j
-        ws.cell(row=r, column=HCAT, value=cat)
-        a = ws.cell(row=r, column=HALL, value=(
+        ws_lists.cell(row=r, column=HCAT, value=cat)
+        a = ws_lists.cell(row=r, column=HALL, value=(
             f'=SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{cat}",'
             f'Transactions!$C:$C,"Spending")'))
         a.number_format = MONEY_FMT
@@ -490,9 +502,9 @@ def build_overview(ws, df):
     cat_chart.legend = None
     cat_chart.width = WIDE
     cat_chart.height = max(10, 0.85 * n_cats + 3)
-    cat_chart.add_data(Reference(ws, min_col=HALL, min_row=hdr, max_row=h_end),
+    cat_chart.add_data(Reference(ws_lists, min_col=HALL, min_row=hdr, max_row=h_end),
                        titles_from_data=True)
-    cat_chart.set_categories(Reference(ws, min_col=HCAT, min_row=hdr + 1, max_row=h_end))
+    cat_chart.set_categories(Reference(ws_lists, min_col=HCAT, min_row=hdr + 1, max_row=h_end))
     _text_categories(cat_chart, chart_cats)
     cat_chart.dataLabels = DataLabelList()
     cat_chart.dataLabels.showVal = True
@@ -521,7 +533,7 @@ def build_overview(ws, df):
     ws.add_chart(mon_chart, f"D{max(int(0.85 * n_cats + 3) + 6, 26)}")
 
 
-def build_monthly(ws, df):
+def build_monthly(ws, df, ws_lists):
     """Single-month view: pick a month, then see a bulk-category pie, the
     detailed breakdown, and money in vs out for that month."""
     months = sorted(df["date"].str.slice(0, 7).unique().tolist())
@@ -609,14 +621,15 @@ def build_monthly(ws, df):
     ws.column_dimensions["A"].width = 24
     ws.column_dimensions["B"].width = 16
 
-    # Month dropdown — validate against a month list kept in a far column.
-    ML = 30
+    # Month dropdown — validate against a month list kept on the hidden Lists
+    # sheet so it never appears as stray data on the Monthly view.
+    ML = 7
     for j, m in enumerate(months):
-        ws.cell(row=2 + j, column=ML, value=m)
+        ws_lists.cell(row=2 + j, column=ML, value=m)
     if months:
         col = get_column_letter(ML)
         dv = DataValidation(type="list",
-                            formula1=f"${col}$2:${col}${1 + len(months)}",
+                            formula1=f"Lists!${col}$2:${col}${1 + len(months)}",
                             allow_blank=False)
         ws.add_data_validation(dv)
         dv.add(MONTH_CELL)
@@ -745,8 +758,8 @@ def build_workbook(df, prior_m=None, prior_n=None):
     build_mapping_sheet(ws_n, "Name", names, TRANSFER_OPTIONS, "B",
                         show_direction=True)
     build_transactions(ws_tx, df, len(spend), len(names))
-    build_overview(ws_over, df)
-    build_monthly(ws_monthly, df)
+    build_overview(ws_over, df, ws_lists)
+    build_monthly(ws_monthly, df, ws_lists)
     build_month_matrix(ws_month, df)
     return wb, spend, names
 

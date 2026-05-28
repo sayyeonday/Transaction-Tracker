@@ -72,9 +72,11 @@ import io, build_excel
 async function buildWorkbook() {
   const creditFiles = Array.from($("credit").files);
   const debitFiles = Array.from($("debit").files);
+  const wealthsimpleFiles = Array.from($("wealthsimple").files);
   const priorFile = $("prior").files[0] || null;
 
-  if (creditFiles.length === 0 && debitFiles.length === 0) {
+  if (creditFiles.length === 0 && debitFiles.length === 0 &&
+      wealthsimpleFiles.length === 0) {
     setStatusText("Please choose at least one CSV file first.", "err");
     return;
   }
@@ -86,6 +88,7 @@ async function buildWorkbook() {
     const specs = [];
     for (const f of creditFiles) specs.push([await readText(f), "credit"]);
     for (const f of debitFiles) specs.push([await readText(f), "debit"]);
+    for (const f of wealthsimpleFiles) specs.push([await readText(f), "wealthsimple"]);
     const priorBytes = priorFile ? await readBytes(priorFile) : null;
 
     setStatus('<span class="spinner"></span>Building your workbook…');

@@ -65,9 +65,12 @@ def _finalize(df):
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
     df = df.dropna(subset=["date"])
     df["merchant"] = df["description"].apply(cd.normalize_merchant)
-    df["flow"] = df.apply(
-        lambda r: cd.classify_flow(r["description"], r["debit"], r["credit"]),
-        axis=1)
+    df["flow"] = [
+        cd.ws_classify(r["description"])[0]
+        if r["source"] == "wealthsimple"
+        else cd.classify_flow(r["description"], r["debit"], r["credit"])
+        for _, r in df.iterrows()
+    ]
     df["amount"] = df["debit"] + df["credit"]
     return df.sort_values("date").reset_index(drop=True)
 
@@ -83,7 +86,7 @@ def ingest_frames(file_specs):
 def ingest():
     """CLI entry: read every CSV in credit/ and debit/ on disk."""
     specs = [(f, source)
-             for source in ("credit", "debit")
+             for source in ("credit", "debit", "wealthsimple")
              for f in glob.glob(os.path.join(cd.BASE, source, "*.csv"))]
     return ingest_frames(specs)
 
@@ -116,7 +119,12 @@ def seed_table(df, flow, defaults):
     """One row per unique merchant/name with a starting Category guess."""
     sub = df[df["flow"] == flow].copy()
     mapping = {k.upper(): v for k, v in defaults.items()}
-    sub["label"] = sub["description"].apply(lambda d: cd.apply_label(d, mapping))
+    sub["label"] = [
+        cd.ws_classify(r["description"])[1]
+        if r["source"] == "wealthsimple"
+        else cd.apply_label(r["description"], mapping)
+        for _, r in sub.iterrows()
+    ]
     rows = []
     for name, g in sub.groupby("merchant"):
         labelled = g["label"][g["label"] != "Uncategorized"]
