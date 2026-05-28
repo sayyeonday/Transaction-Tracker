@@ -67,6 +67,12 @@ INCOME_LABELS = {
     "Transfer_Allowance", "Transfer_Income", "Transfer_Reimbursed",
 }
 
+# Internal money movements: the SAME dollars appear on both accounts (paying a
+# credit card debits chequing AND credits the card; moving between your own
+# accounts shows on both). Counting them as income/spending double-counts, so
+# the dashboard excludes them from "real" money-in / money-out and net.
+INTERNAL_TRANSFERS = {"Transfer_OwnAccount", "Transfer_CardPayment"}
+
 # Bulk groups for the monthly pie: the detailed categories are great for the
 # all-time bar, but a per-month pie is more readable rolled up to ~13 buckets.
 SPENDING_GROUPS = [

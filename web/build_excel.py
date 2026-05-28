@@ -225,29 +225,49 @@ def _style_pie(chart):
     chart.dataLabels.txPr = _rich_size(10, bold=True)
 
 
-def _spending_categories_present(df):
-    """Categories that actually have spending, largest first.
-
-    The pie was unreadable because it drew a slice (and a leader-lined label)
-    for every one of the ~35 categories, most of them $0. We resolve each
-    transaction's default category the same way the workbook does
-    (merchant → its seeded category) and keep only categories with spend, so
-    the charts plot a short, ordered list instead of every empty bucket."""
+def _default_category_totals(df):
+    """Spend per category using the SAME merchant→category resolution the
+    workbook uses, so the ordering matches what the user first sees. Used only
+    to ORDER the charts — every category is still plotted (see below) so the
+    chart stays correct after the user re-categorizes a merchant."""
     spend_tbl = seed_table(df, "Spending", cd.DEFAULT_CATEGORIES)
     cat_by_merchant = dict(zip(spend_tbl["name"], spend_tbl["category"]))
     sub = df[df["flow"] == "Spending"].copy()
     if sub.empty:
-        return []
+        return {}
     sub["cat"] = sub["merchant"].map(cat_by_merchant).fillna("Uncategorized")
-    totals = sub.groupby("cat")["debit"].sum()
-    ordered = totals[totals > 0].sort_values(ascending=False)
-    return list(ordered.index)
+    return sub.groupby("cat")["debit"].sum().to_dict()
 
 
-def _spending_groups_present(df):
-    """Bulk groups that have any spending, in SPENDING_GROUPS order."""
-    present = {cd.spending_group(c) for c in _spending_categories_present(df)}
-    return [g for g in cd.SPENDING_GROUPS if g in present]
+def _chart_categories(df):
+    """Every spending category, ordered by current spend (largest first).
+
+    We plot ALL categories — not just the ones with spend today — so a category
+    the user later assigns a merchant to still shows up without a rebuild. The
+    "Uncategorized" bucket is included whenever it has spend, so the charts tie
+    out to Total spending instead of quietly dropping unlabelled money."""
+    totals = _default_category_totals(df)
+    cats = list(cd.SPENDING_CATEGORIES)
+    if totals.get("Uncategorized", 0) > 0:
+        cats.append("Uncategorized")
+    cats.sort(key=lambda c: totals.get(c, 0.0), reverse=True)
+    return cats
+
+
+def _chart_groups(df):
+    """Every bulk group (plus Uncategorized when present), largest first."""
+    totals = _default_category_totals(df)
+    group_total = {}
+    for cat, amt in totals.items():
+        group_total[cd.spending_group(cat) if cat != "Uncategorized"
+                    else "Uncategorized"] = (
+            group_total.get(cd.spending_group(cat) if cat != "Uncategorized"
+                            else "Uncategorized", 0.0) + amt)
+    groups = list(cd.SPENDING_GROUPS)
+    if totals.get("Uncategorized", 0) > 0:
+        groups.append("Uncategorized")
+    groups.sort(key=lambda g: group_total.get(g, 0.0), reverse=True)
+    return groups
 
 
 def build_lists(ws):
@@ -419,7 +439,9 @@ def build_overview(ws, df):
     tr_cats = cd.TRANSFER_CATEGORIES
     for j, cat in enumerate(tr_cats):
         r = tr_top + 1 + j
-        ws.cell(row=r, column=1, value=cat)
+        internal = cat in cd.INTERNAL_TRANSFERS
+        ws.cell(row=r, column=1,
+                value=(cat + " (internal)") if internal else cat)
         ci = ws.cell(row=r, column=2, value=(
             f'=SUMIFS(Transactions!$G:$G,Transactions!$I:$I,"{cat}",'
             f'Transactions!$C:$C,"Transfer")'))
@@ -437,14 +459,18 @@ def build_overview(ws, df):
                        value=f"=SUM({col}{tr_top + 1}:{col}{tr_end})")
         cell.number_format = MONEY_FMT
         cell.font = LABEL_FONT
+    note = ws.cell(row=tr_end + 2, column=1, value=(
+        "(internal) = your own money moving between accounts / card payments — "
+        "it appears on both sides and nets to ~0, so it isn't real income or spend."))
+    note.font = Font(italic=True, color="6B7280")
 
     ws.column_dimensions["A"].width = 24
     ws.column_dimensions["B"].width = 14
     ws.column_dimensions["C"].width = 14
 
-    # Helper table for the bar (non-zero categories only, ascending so the
-    # largest lands at the top). Values stay live SUMIFS.
-    chart_cats = list(reversed(_spending_categories_present(df)))
+    # Helper table for the bar: ALL categories, ascending so the largest lands
+    # at the top and unused ones sink to the bottom. Values stay live SUMIFS.
+    chart_cats = list(reversed(_chart_categories(df)))
     HCAT, HALL, hdr = 24, 25, 2
     ws.cell(row=hdr, column=HALL, value="All months")
     for j, cat in enumerate(chart_cats):
@@ -514,18 +540,27 @@ def build_monthly(ws, df):
     # Money in vs out for the selected month
     sum_top = 6
     _write_header(ws, sum_top, ["This month", "Amount"])
+    spend_f = (f'SUMIFS(Transactions!$F:$F,Transactions!$H:$H,{mref},'
+               f'Transactions!$C:$C,"Spending")')
+    income_f = "+".join(
+        f'SUMIFS(Transactions!$G:$G,Transactions!$I:$I,"{lbl}",'
+        f'Transactions!$H:$H,{mref})' for lbl in sorted(cd.INCOME_LABELS))
+    internal_in = "+".join(
+        f'SUMIFS(Transactions!$G:$G,Transactions!$I:$I,"{cat}",'
+        f'Transactions!$H:$H,{mref})' for cat in sorted(cd.INTERNAL_TRANSFERS))
+    internal_out = "+".join(
+        f'SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{cat}",'
+        f'Transactions!$H:$H,{mref})' for cat in sorted(cd.INTERNAL_TRANSFERS))
+    transfer_in_f = (f'SUMIFS(Transactions!$G:$G,Transactions!$H:$H,{mref},'
+                     f'Transactions!$C:$C,"Transfer")-({internal_in})')
+    transfer_out_f = (f'SUMIFS(Transactions!$F:$F,Transactions!$H:$H,{mref},'
+                      f'Transactions!$C:$C,"Transfer")-({internal_out})')
     summary = [
-        ("Spending (out)",
-         f'=SUMIFS(Transactions!$F:$F,Transactions!$H:$H,{mref},Transactions!$C:$C,"Spending")'),
-        ("Transfers in",
-         f'=SUMIFS(Transactions!$G:$G,Transactions!$H:$H,{mref},Transactions!$C:$C,"Transfer")'),
-        ("Transfers out",
-         f'=SUMIFS(Transactions!$F:$F,Transactions!$H:$H,{mref},Transactions!$C:$C,"Transfer")'),
-        ("All money in", f'=SUMIFS(Transactions!$G:$G,Transactions!$H:$H,{mref})'),
-        ("All money out", f'=SUMIFS(Transactions!$F:$F,Transactions!$H:$H,{mref})'),
-        ("Net (in − out)",
-         f'=SUMIFS(Transactions!$G:$G,Transactions!$H:$H,{mref})'
-         f'-SUMIFS(Transactions!$F:$F,Transactions!$H:$H,{mref})'),
+        ("Spending (out)", "=" + spend_f),
+        ("Income (in)", "=" + income_f),
+        ("Net (income − spending)", f"=({income_f})-({spend_f})"),
+        ("Transfers received (excl. internal)", "=" + transfer_in_f),
+        ("Transfers sent (excl. internal)", "=" + transfer_out_f),
     ]
     for j, (label, formula) in enumerate(summary):
         r = sum_top + 1 + j
@@ -533,12 +568,18 @@ def build_monthly(ws, df):
         v = ws.cell(row=r, column=2, value=formula)
         v.number_format = MONEY_FMT
     sum_end = sum_top + len(summary)
+    snote = ws.cell(row=sum_end + 1, column=1, value=(
+        "Internal moves (own-account transfers, card payments) are excluded — "
+        "they'd double-count money you already see as spending."))
+    snote.font = Font(italic=True, color="6B7280")
+    sum_end += 1
 
-    # Bulk-group table for the month (drives the pie)
+    # Bulk-group table for the month (drives the pie). Includes Uncategorized
+    # when present so the pie ties out to the month's total spending.
     members = {}
     for c in cd.SPENDING_CATEGORIES:
         members.setdefault(cd.spending_group(c), []).append(c)
-    groups = _spending_groups_present(df)
+    groups = _chart_groups(df)
     grp_top = sum_end + 3
     _write_header(ws, grp_top, ["Group", "Spent this month"])
     for j, g in enumerate(groups):
@@ -547,13 +588,13 @@ def build_monthly(ws, df):
         terms = "+".join(
             f'SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{c}",'
             f'Transactions!$H:$H,{mref},Transactions!$C:$C,"Spending")'
-            for c in members[g])
+            for c in members.get(g, [g]))   # Uncategorized: match itself
         v = ws.cell(row=r, column=2, value="=" + terms)
         v.number_format = MONEY_FMT
     grp_end = grp_top + len(groups)
 
     # Detailed category table for the month (drives the detail bar)
-    detail_cats = list(reversed(_spending_categories_present(df)))
+    detail_cats = list(reversed(_chart_categories(df)))
     det_top = grp_end + 3
     _write_header(ws, det_top, ["Category", "Spent this month"])
     for j, cat in enumerate(detail_cats):
@@ -719,13 +760,19 @@ def build_bytes(file_specs, prior_xlsx_bytes=None):
     df = ingest_frames(file_specs)
     prior_m, prior_n = {}, {}
     if prior_xlsx_bytes:
+        # The user deliberately supplied a previous workbook to carry labels and
+        # old transactions forward. If it can't be read, fail loudly rather than
+        # silently dropping their saved categories.
         try:
             prev = load_workbook(io.BytesIO(prior_xlsx_bytes), read_only=True)
             prior_m, prior_n, prior_tx = read_prior(prev)
             prev.close()
             df = merge_prior(df, prior_tx)
-        except Exception:
-            pass
+        except Exception as e:
+            raise ValueError(
+                "Couldn't read the previous finance.xlsx you provided, so your "
+                "saved categories weren't carried over. Remove it and try again, "
+                f"or upload the correct file. (details: {e})")
     if df is None or df.empty:
         raise ValueError("No transactions found in the uploaded files.")
     wb, _, _ = build_workbook(df, prior_m, prior_n)
@@ -748,8 +795,10 @@ def build():
             prior_m, prior_n, prior_tx = read_prior(prev)
             prev.close()
             df = merge_prior(df, prior_tx)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"WARNING: couldn't read the existing {os.path.basename(XLSX)} "
+                  f"({e}). Your previously saved categories will NOT be carried "
+                  "over. Move or fix that file if you want to keep them.")
     wb, spend, names = build_workbook(df, prior_m, prior_n)
 
     try:
