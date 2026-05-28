@@ -82,17 +82,23 @@ First Bank Card,Transaction Type,Date Posted,Transaction Amount,Description
 
 `finance.xlsx` has these tabs:
 
-- **Dashboard** — totals (spending, income, net), spending by category, monthly
-  spending, and income breakdown. Charts and numbers recompute automatically.
+- **Overview** — all-time totals (spending, income, net), a spending-by-category
+  bar, the monthly spending trend, an income breakdown, and a **Transfers**
+  table that splits each transfer type into money **In** vs **Out**.
+- **Monthly** — pick a month in cell **B4** and everything updates: a
+  bulk-category **pie** (Food, Shopping, Transport…), a detailed category bar,
+  and that month's money **in vs out** summary.
 - **Transactions** — every cleaned transaction. The *Category* column is a
   formula that looks up the merchant/name from the tabs below.
 - **Merchants** — each unique place you spent money. Pick a **Category** from the
   dropdown and it applies to every matching transaction.
 - **Names** — each unique transfer name (allowance, split bills, salary, your
-  own accounts…). Same dropdown idea.
+  own accounts…). Same dropdown idea, with money received (**In**) and sent
+  (**Out**) shown separately so direction is never lost.
 
 Workflow: open the **Merchants** and **Names** tabs, choose a category for each
-row from the dropdown, and watch the **Dashboard** update. That's it.
+row from the dropdown, and watch the **Overview** / **Monthly** tabs update.
+That's it.
 
 ### Adding new statements (and keeping your labels)
 

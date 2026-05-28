@@ -67,6 +67,30 @@ INCOME_LABELS = {
     "Transfer_Allowance", "Transfer_Income", "Transfer_Reimbursed",
 }
 
+# Bulk groups for the monthly pie: the detailed categories are great for the
+# all-time bar, but a per-month pie is more readable rolled up to ~13 buckets.
+SPENDING_GROUPS = [
+    "Food", "Shopping", "Transport", "Travel", "Bills", "Health",
+    "Entertainment", "Subscriptions", "Education", "Gifts", "Pets",
+    "Family", "Fees", "Cash", "Other",
+]
+
+
+def spending_group(category):
+    """Roll a detailed spending category up into its bulk group."""
+    c = category or ""
+    for prefix, group in (
+        ("Food", "Food"), ("Shopping", "Shopping"), ("Transport", "Transport"),
+        ("Travel", "Travel"), ("Bills", "Bills"), ("Health", "Health"),
+        ("Subscription", "Subscriptions"), ("Fees", "Fees"), ("Cash", "Cash"),
+    ):
+        if c.startswith(prefix):
+            return group
+    return {
+        "Entertainment": "Entertainment", "Education": "Education",
+        "Gifts_Donations": "Gifts", "Pets": "Pets", "Kids_Family": "Family",
+    }.get(c, "Other")
+
 # ── Default dictionaries shipped with the code (the user overrides via CSV) ──
 DEFAULT_CATEGORIES = {
     # Food_Groceries

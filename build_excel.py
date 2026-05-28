@@ -8,13 +8,16 @@ This reads every CSV in credit/ and debit/, classifies each transaction, and
 writes finance.xlsx. After that, EVERYTHING happens inside Excel -- no Python,
 no internet, no AI:
 
-  - Dashboard   : headline numbers + charts (spending by category, by month,
-                  income). They recompute automatically via formulas.
+  - Overview    : all-time numbers + charts (spending by category bar, monthly
+                  trend, income, and transfers split into money in vs out).
+  - Monthly     : pick a month and see a bulk-category pie, a detailed
+                  breakdown, and that month's money in vs out.
   - Transactions: every cleaned transaction. The Category column is a formula
                   that looks up the merchant/name on the sheets below.
   - Merchants   : each unique spending merchant. Pick a Category from the
                   dropdown -- it applies to every matching transaction.
-  - Names       : each unique transfer name (allowance, split bills, salary...).
+  - Names       : each unique transfer name (allowance, split bills, salary...),
+                  with money received (In) and sent (Out) shown separately.
 
 Re-run this script whenever you add new statements; your previous dropdown
 choices are read back from the existing finance.xlsx and preserved.
@@ -121,10 +124,13 @@ def seed_table(df, flow, defaults):
             "category": cat,
             "count": len(g),
             "total": round(float(g["amount"].sum()), 2),
+            "inflow": round(float(g["credit"].sum()), 2),
+            "outflow": round(float(g["debit"].sum()), 2),
             "example": g["description"].iloc[0],
         })
     if not rows:
-        return pd.DataFrame(columns=["name", "category", "count", "total", "example"])
+        return pd.DataFrame(columns=["name", "category", "count", "total",
+                                     "inflow", "outflow", "example"])
     return (pd.DataFrame(rows)
             .sort_values("total", ascending=False)
             .reset_index(drop=True))
@@ -238,6 +244,12 @@ def _spending_categories_present(df):
     return list(ordered.index)
 
 
+def _spending_groups_present(df):
+    """Bulk groups that have any spending, in SPENDING_GROUPS order."""
+    present = {cd.spending_group(c) for c in _spending_categories_present(df)}
+    return [g for g in cd.SPENDING_GROUPS if g in present]
+
+
 def build_lists(ws):
     ws["A1"] = "SpendingOptions"
     for i, opt in enumerate(SPENDING_OPTIONS, start=2):
@@ -248,15 +260,32 @@ def build_lists(ws):
     ws.sheet_state = "hidden"
 
 
-def build_mapping_sheet(ws, name_header, table, options, list_col):
-    _write_header(ws, 1, [name_header, "Category", "Count", "Total", "Example"])
+def build_mapping_sheet(ws, name_header, table, options, list_col,
+                        show_direction=False):
+    """One row per merchant/transfer name with an editable Category dropdown.
+
+    For transfer names (show_direction=True) the single "Total" is split into
+    "In" (money received) and "Out" (money sent) so a person you both pay and
+    get paid by isn't collapsed into one misleading number."""
+    if show_direction:
+        _write_header(ws, 1,
+                      [name_header, "Category", "Count", "In", "Out", "Example"])
+    else:
+        _write_header(ws, 1, [name_header, "Category", "Count", "Total", "Example"])
     for i, r in enumerate(table.itertuples(index=False), start=2):
         ws.cell(row=i, column=1, value=r.name)
         ws.cell(row=i, column=2, value=r.category)
         ws.cell(row=i, column=3, value=int(r.count))
-        amt = ws.cell(row=i, column=4, value=float(r.total))
-        amt.number_format = MONEY_FMT2
-        ws.cell(row=i, column=5, value=r.example)
+        if show_direction:
+            ci = ws.cell(row=i, column=4, value=float(r.inflow))
+            ci.number_format = MONEY_FMT2
+            co = ws.cell(row=i, column=5, value=float(r.outflow))
+            co.number_format = MONEY_FMT2
+            ws.cell(row=i, column=6, value=r.example)
+        else:
+            amt = ws.cell(row=i, column=4, value=float(r.total))
+            amt.number_format = MONEY_FMT2
+            ws.cell(row=i, column=5, value=r.example)
 
     last = len(table) + 1
     dv = DataValidation(
@@ -271,10 +300,17 @@ def build_mapping_sheet(ws, name_header, table, options, list_col):
     ws.column_dimensions["A"].width = 34
     ws.column_dimensions["B"].width = 22
     ws.column_dimensions["C"].width = 8
-    ws.column_dimensions["D"].width = 14
-    ws.column_dimensions["E"].width = 60
+    if show_direction:
+        ws.column_dimensions["D"].width = 12
+        ws.column_dimensions["E"].width = 12
+        ws.column_dimensions["F"].width = 60
+        last_col = "F"
+    else:
+        ws.column_dimensions["D"].width = 14
+        ws.column_dimensions["E"].width = 60
+        last_col = "E"
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:E{max(last, 1)}"
+    ws.auto_filter.ref = f"A1:{last_col}{max(last, 1)}"
 
 
 def build_transactions(ws, df, n_merch, n_names):
@@ -306,11 +342,17 @@ def build_transactions(ws, df, n_merch, n_names):
     ws.auto_filter.ref = f"A1:I{len(df) + 1}"
 
 
-def build_dashboard(ws, df):
-    months = sorted(df["date"].str.slice(0, 7).unique().tolist())
-    n_spend = len(cd.SPENDING_CATEGORIES)
+def _mref(month_cell):
+    """Absolute reference string for the month-selector cell (e.g. B4 -> $B$4)."""
+    return f"${month_cell[0]}${month_cell[1:]}"
 
-    ws["A1"] = "My Spending"
+
+def build_overview(ws, df):
+    """All-time view: totals, spending by category (bar), the monthly trend,
+    income, and transfers split by direction (money in vs out)."""
+    months = sorted(df["date"].str.slice(0, 7).unique().tolist())
+
+    ws["A1"] = "Overview — all transactions"
     ws["A1"].font = TITLE_FONT
     ws["A2"] = (f"{len(df)} transactions  ·  {df['date'].min()} to {df['date'].max()}"
                 "  ·  edit categories on the Merchants / Names sheets")
@@ -323,26 +365,18 @@ def build_dashboard(ws, df):
     metrics = [
         ("Total spending", '=SUMIFS(Transactions!$F:$F,Transactions!$C:$C,"Spending")'),
         ("Total income", "=" + income_terms),
-        ("Net", "=B5-B4"),
+        ("Net (income − spending)", "=B5-B4"),
         ("Uncategorized spend",
          '=SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"Uncategorized",'
          'Transactions!$C:$C,"Spending")'),
     ]
     for i, (label, formula) in enumerate(metrics, start=4):
-        lc = ws.cell(row=i, column=1, value=label)
-        lc.font = LABEL_FONT
+        ws.cell(row=i, column=1, value=label).font = LABEL_FONT
         vc = ws.cell(row=i, column=2, value=formula)
         vc.number_format = MONEY_FMT
 
-    # Month selector — drives the per-month category pie below.
-    MONTH_CELL = "B8"
-    sel = ws.cell(row=8, column=1, value="Pie month →")
-    sel.font = LABEL_FONT
-    mc = ws.cell(row=8, column=2, value=(months[-1] if months else ""))
-    mc.font = Font(bold=True, color="2563EB")
-
-    # Spending by category table
-    cat_top = 10
+    # Spending by category (all categories, for reference)
+    cat_top = 9
     _write_header(ws, cat_top, ["Category", "Spent"])
     for j, cat in enumerate(cd.SPENDING_CATEGORIES):
         r = cat_top + 1 + j
@@ -351,9 +385,9 @@ def build_dashboard(ws, df):
             f'=SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{cat}",'
             f'Transactions!$C:$C,"Spending")'))
         v.number_format = MONEY_FMT
-    cat_end = cat_top + n_spend
+    cat_end = cat_top + len(cd.SPENDING_CATEGORIES)
 
-    # Monthly spending table
+    # Monthly trend table (drives the over-time column chart)
     mon_top = cat_end + 3
     _write_header(ws, mon_top, ["Month", "Spent"])
     for j, m in enumerate(months):
@@ -365,17 +399,7 @@ def build_dashboard(ws, df):
         v.number_format = MONEY_FMT
     mon_end = mon_top + len(months)
 
-    # Month dropdown validation (references the Month column just written).
-    if months:
-        dv = DataValidation(
-            type="list",
-            formula1=f"$A${mon_top + 1}:$A${mon_end}",
-            allow_blank=False,
-        )
-        ws.add_data_validation(dv)
-        dv.add(MONTH_CELL)
-
-    # Income breakdown table
+    # Income breakdown
     inc_top = mon_end + 3
     _write_header(ws, inc_top, ["Income source", "Amount"])
     inc_labels = sorted(cd.INCOME_LABELS)
@@ -387,32 +411,42 @@ def build_dashboard(ws, df):
         v.number_format = MONEY_FMT
     inc_end = inc_top + len(inc_labels)
 
-    # Per-month spending by category (recomputes when the month cell changes)
-    pm_top = inc_end + 3
-    _write_header(ws, pm_top, ["Category", "Spent in selected month"])
-    for j, cat in enumerate(cd.SPENDING_CATEGORIES):
-        r = pm_top + 1 + j
+    # Transfers — money IN vs OUT, per transfer category. A transfer category
+    # can have both (e.g. you both pay and get paid by the same person), so
+    # the two directions are shown side by side rather than netted.
+    tr_top = inc_end + 3
+    _write_header(ws, tr_top, ["Transfer type", "In", "Out"])
+    tr_cats = cd.TRANSFER_CATEGORIES
+    for j, cat in enumerate(tr_cats):
+        r = tr_top + 1 + j
         ws.cell(row=r, column=1, value=cat)
-        v = ws.cell(row=r, column=2, value=(
+        ci = ws.cell(row=r, column=2, value=(
+            f'=SUMIFS(Transactions!$G:$G,Transactions!$I:$I,"{cat}",'
+            f'Transactions!$C:$C,"Transfer")'))
+        ci.number_format = MONEY_FMT
+        co = ws.cell(row=r, column=3, value=(
             f'=SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{cat}",'
-            f'Transactions!$H:$H,${MONTH_CELL[0]}${MONTH_CELL[1:]},'
-            f'Transactions!$C:$C,"Spending")'))
-        v.number_format = MONEY_FMT
-    pm_end = pm_top + n_spend
+            f'Transactions!$C:$C,"Transfer")'))
+        co.number_format = MONEY_FMT
+    tr_end = tr_top + len(tr_cats)
+    tot = ws.cell(row=tr_end + 1, column=1, value="Total")
+    tot.font = LABEL_FONT
+    for c in (2, 3):
+        col = get_column_letter(c)
+        cell = ws.cell(row=tr_end + 1, column=c,
+                       value=f"=SUM({col}{tr_top + 1}:{col}{tr_end})")
+        cell.number_format = MONEY_FMT
+        cell.font = LABEL_FONT
 
-    ws.column_dimensions["A"].width = 22
-    ws.column_dimensions["B"].width = 22
+    ws.column_dimensions["A"].width = 24
+    ws.column_dimensions["B"].width = 14
+    ws.column_dimensions["C"].width = 14
 
-    # Chart-data helper table (far columns, out of normal view). Only the
-    # categories that actually have spending are listed, largest last so the
-    # horizontal bar shows the biggest at the top. The values stay live SUMIFS
-    # formulas, so they still recompute if the user re-categorizes.
-    present = _spending_categories_present(df)
-    chart_cats = list(reversed(present))   # ascending → largest at top of bar
-    HCAT, HALL, HMON = 24, 25, 26          # helper columns X, Y, Z
-    hdr = 2
+    # Helper table for the bar (non-zero categories only, ascending so the
+    # largest lands at the top). Values stay live SUMIFS.
+    chart_cats = list(reversed(_spending_categories_present(df)))
+    HCAT, HALL, hdr = 24, 25, 2
     ws.cell(row=hdr, column=HALL, value="All months")
-    ws.cell(row=hdr, column=HMON, value="Selected month")
     for j, cat in enumerate(chart_cats):
         r = hdr + 1 + j
         ws.cell(row=r, column=HCAT, value=cat)
@@ -420,30 +454,19 @@ def build_dashboard(ws, df):
             f'=SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{cat}",'
             f'Transactions!$C:$C,"Spending")'))
         a.number_format = MONEY_FMT
-        m = ws.cell(row=r, column=HMON, value=(
-            f'=SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{cat}",'
-            f'Transactions!$H:$H,${MONTH_CELL[0]}${MONTH_CELL[1:]},'
-            f'Transactions!$C:$C,"Spending")'))
-        m.number_format = MONEY_FMT
     h_end = hdr + len(chart_cats)
     n_cats = max(len(chart_cats), 1)
 
-    # Charts live to the right of the tables (column D+).
     WIDE = 28
-
-    # 1) All-months breakdown — horizontal bar. A bar handles many categories
-    # far better than a pie: one row each, no overlapping labels or leader
-    # lines. Tall enough that every category label is readable.
     cat_chart = BarChart()
     cat_chart.type = "bar"
     _set_title(cat_chart, "Spending by category — all months", 16)
     cat_chart.legend = None
     cat_chart.width = WIDE
     cat_chart.height = max(10, 0.85 * n_cats + 3)
-    data = Reference(ws, min_col=HALL, min_row=hdr, max_row=h_end)
-    cats = Reference(ws, min_col=HCAT, min_row=hdr + 1, max_row=h_end)
-    cat_chart.add_data(data, titles_from_data=True)
-    cat_chart.set_categories(cats)
+    cat_chart.add_data(Reference(ws, min_col=HALL, min_row=hdr, max_row=h_end),
+                       titles_from_data=True)
+    cat_chart.set_categories(Reference(ws, min_col=HCAT, min_row=hdr + 1, max_row=h_end))
     _text_categories(cat_chart, chart_cats)
     cat_chart.dataLabels = DataLabelList()
     cat_chart.dataLabels.showVal = True
@@ -455,38 +478,140 @@ def build_dashboard(ws, df):
     cat_chart.y_axis.txPr = _rich_size(11)
     ws.add_chart(cat_chart, "D3")
 
-    # 2) Selected-month breakdown — pie (as requested), but only over the
-    # categories that have annual spend, so it loses the wall of $0 slices.
-    pm_chart = PieChart()
-    _set_title(pm_chart, "Spending by category — selected month (see cell B8)", 16)
-    pm_chart.height = 17
-    pm_chart.width = WIDE
-    pdata = Reference(ws, min_col=HMON, min_row=hdr, max_row=h_end)
-    pcats = Reference(ws, min_col=HCAT, min_row=hdr + 1, max_row=h_end)
-    pm_chart.add_data(pdata, titles_from_data=True)
-    pm_chart.set_categories(pcats)
-    _text_categories(pm_chart, chart_cats)
-    _style_pie(pm_chart)
-    pm_row = max(int(0.85 * n_cats + 3) + 6, 26)
-    ws.add_chart(pm_chart, f"D{pm_row}")
-
-    # 3) Monthly spending over time — column chart.
     mon_chart = BarChart()
     mon_chart.type = "col"
-    _set_title(mon_chart, "Monthly spending", 16)
+    _set_title(mon_chart, "Monthly spending over time", 16)
     mon_chart.legend = None
     mon_chart.height = 11
     mon_chart.width = WIDE
-    mdata = Reference(ws, min_col=2, min_row=mon_top, max_row=mon_end)
-    mcats = Reference(ws, min_col=1, min_row=mon_top + 1, max_row=mon_end)
-    mon_chart.add_data(mdata, titles_from_data=True)
-    mon_chart.set_categories(mcats)
+    mon_chart.add_data(Reference(ws, min_col=2, min_row=mon_top, max_row=mon_end),
+                       titles_from_data=True)
+    mon_chart.set_categories(Reference(ws, min_col=1, min_row=mon_top + 1, max_row=mon_end))
     _text_categories(mon_chart, months)
-    mon_chart.x_axis.delete = False   # force month labels to render
+    mon_chart.x_axis.delete = False
     mon_chart.y_axis.delete = False
     mon_chart.x_axis.txPr = _rich_size(10)
     mon_chart.y_axis.txPr = _rich_size(10)
-    ws.add_chart(mon_chart, f"D{pm_row + 36}")
+    ws.add_chart(mon_chart, f"D{max(int(0.85 * n_cats + 3) + 6, 26)}")
+
+
+def build_monthly(ws, df):
+    """Single-month view: pick a month, then see a bulk-category pie, the
+    detailed breakdown, and money in vs out for that month."""
+    months = sorted(df["date"].str.slice(0, 7).unique().tolist())
+    MONTH_CELL = "B4"
+    mref = _mref(MONTH_CELL)
+
+    ws["A1"] = "Monthly view"
+    ws["A1"].font = TITLE_FONT
+    ws["A2"] = "Pick a month in cell B4 — every table and chart below updates."
+    ws["A2"].font = Font(color="6B7280")
+
+    ws.cell(row=4, column=1, value="Month →").font = LABEL_FONT
+    mc = ws.cell(row=4, column=2, value=(months[-1] if months else ""))
+    mc.font = Font(bold=True, color="2563EB")
+
+    # Money in vs out for the selected month
+    sum_top = 6
+    _write_header(ws, sum_top, ["This month", "Amount"])
+    summary = [
+        ("Spending (out)",
+         f'=SUMIFS(Transactions!$F:$F,Transactions!$H:$H,{mref},Transactions!$C:$C,"Spending")'),
+        ("Transfers in",
+         f'=SUMIFS(Transactions!$G:$G,Transactions!$H:$H,{mref},Transactions!$C:$C,"Transfer")'),
+        ("Transfers out",
+         f'=SUMIFS(Transactions!$F:$F,Transactions!$H:$H,{mref},Transactions!$C:$C,"Transfer")'),
+        ("All money in", f'=SUMIFS(Transactions!$G:$G,Transactions!$H:$H,{mref})'),
+        ("All money out", f'=SUMIFS(Transactions!$F:$F,Transactions!$H:$H,{mref})'),
+        ("Net (in − out)",
+         f'=SUMIFS(Transactions!$G:$G,Transactions!$H:$H,{mref})'
+         f'-SUMIFS(Transactions!$F:$F,Transactions!$H:$H,{mref})'),
+    ]
+    for j, (label, formula) in enumerate(summary):
+        r = sum_top + 1 + j
+        ws.cell(row=r, column=1, value=label).font = LABEL_FONT
+        v = ws.cell(row=r, column=2, value=formula)
+        v.number_format = MONEY_FMT
+    sum_end = sum_top + len(summary)
+
+    # Bulk-group table for the month (drives the pie)
+    members = {}
+    for c in cd.SPENDING_CATEGORIES:
+        members.setdefault(cd.spending_group(c), []).append(c)
+    groups = _spending_groups_present(df)
+    grp_top = sum_end + 3
+    _write_header(ws, grp_top, ["Group", "Spent this month"])
+    for j, g in enumerate(groups):
+        r = grp_top + 1 + j
+        ws.cell(row=r, column=1, value=g)
+        terms = "+".join(
+            f'SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{c}",'
+            f'Transactions!$H:$H,{mref},Transactions!$C:$C,"Spending")'
+            for c in members[g])
+        v = ws.cell(row=r, column=2, value="=" + terms)
+        v.number_format = MONEY_FMT
+    grp_end = grp_top + len(groups)
+
+    # Detailed category table for the month (drives the detail bar)
+    detail_cats = list(reversed(_spending_categories_present(df)))
+    det_top = grp_end + 3
+    _write_header(ws, det_top, ["Category", "Spent this month"])
+    for j, cat in enumerate(detail_cats):
+        r = det_top + 1 + j
+        ws.cell(row=r, column=1, value=cat)
+        v = ws.cell(row=r, column=2, value=(
+            f'=SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{cat}",'
+            f'Transactions!$H:$H,{mref},Transactions!$C:$C,"Spending")'))
+        v.number_format = MONEY_FMT
+    det_end = det_top + len(detail_cats)
+
+    ws.column_dimensions["A"].width = 24
+    ws.column_dimensions["B"].width = 16
+
+    # Month dropdown — validate against a month list kept in a far column.
+    ML = 30
+    for j, m in enumerate(months):
+        ws.cell(row=2 + j, column=ML, value=m)
+    if months:
+        col = get_column_letter(ML)
+        dv = DataValidation(type="list",
+                            formula1=f"${col}$2:${col}${1 + len(months)}",
+                            allow_blank=False)
+        ws.add_data_validation(dv)
+        dv.add(MONTH_CELL)
+
+    WIDE = 28
+    pie = PieChart()
+    _set_title(pie, "Spending by group — selected month (cell B4)", 16)
+    pie.height = 16
+    pie.width = WIDE
+    pie.add_data(Reference(ws, min_col=2, min_row=grp_top, max_row=grp_end),
+                 titles_from_data=True)
+    pie.set_categories(Reference(ws, min_col=1, min_row=grp_top + 1, max_row=grp_end))
+    _text_categories(pie, groups)
+    _style_pie(pie)
+    ws.add_chart(pie, "D3")
+
+    n_det = max(len(detail_cats), 1)
+    bar = BarChart()
+    bar.type = "bar"
+    _set_title(bar, "Spending by category — selected month", 16)
+    bar.legend = None
+    bar.width = WIDE
+    bar.height = max(10, 0.85 * n_det + 3)
+    bar.add_data(Reference(ws, min_col=2, min_row=det_top, max_row=det_end),
+                 titles_from_data=True)
+    bar.set_categories(Reference(ws, min_col=1, min_row=det_top + 1, max_row=det_end))
+    _text_categories(bar, detail_cats)
+    bar.dataLabels = DataLabelList()
+    bar.dataLabels.showVal = True
+    bar.dataLabels.numFmt = MONEY_FMT
+    bar.dataLabels.txPr = _rich_size(10, bold=True)
+    bar.x_axis.delete = False
+    bar.y_axis.delete = False
+    bar.x_axis.txPr = _rich_size(10)
+    bar.y_axis.txPr = _rich_size(11)
+    ws.add_chart(bar, "D36")
 
 
 def build_month_matrix(ws, df):
@@ -565,8 +690,9 @@ def build_workbook(df, prior_m=None, prior_n=None):
         names["category"] = names["name"].map(prior_n).fillna(names["category"])
 
     wb = Workbook()
-    ws_dash = wb.active
-    ws_dash.title = "Dashboard"
+    ws_over = wb.active
+    ws_over.title = "Overview"
+    ws_monthly = wb.create_sheet("Monthly")
     ws_tx = wb.create_sheet("Transactions")
     ws_m = wb.create_sheet("Merchants")
     ws_n = wb.create_sheet("Names")
@@ -575,9 +701,11 @@ def build_workbook(df, prior_m=None, prior_n=None):
 
     build_lists(ws_lists)
     build_mapping_sheet(ws_m, "Merchant", spend, SPENDING_OPTIONS, "A")
-    build_mapping_sheet(ws_n, "Name", names, TRANSFER_OPTIONS, "B")
+    build_mapping_sheet(ws_n, "Name", names, TRANSFER_OPTIONS, "B",
+                        show_direction=True)
     build_transactions(ws_tx, df, len(spend), len(names))
-    build_dashboard(ws_dash, df)
+    build_overview(ws_over, df)
+    build_monthly(ws_monthly, df)
     build_month_matrix(ws_month, df)
     return wb, spend, names
 
