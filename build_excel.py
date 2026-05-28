@@ -30,6 +30,7 @@ from openpyxl.chart import BarChart, PieChart, Reference
 from openpyxl.chart.data_source import AxDataSource, StrData, StrRef, StrVal
 from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
 import clean_data as cd
@@ -393,6 +394,70 @@ def build_dashboard(ws, df):
     ws.add_chart(pm_chart, "D44")
 
 
+def build_month_matrix(ws, df):
+    """A category × month grid: one row per spending category, one column per
+    month, plus a Total. A second grid below shows each category's share of
+    that month's spending (the 'portion' view)."""
+    months = sorted(df["date"].str.slice(0, 7).unique().tolist())
+    cats = list(cd.SPENDING_CATEGORIES)
+    n = len(cats)
+    total_col = len(months) + 2          # col index of the row-total column
+    last_month_col = len(months) + 1
+    L = get_column_letter
+
+    ws["A1"] = "Spending by category — monthly"
+    ws["A1"].font = TITLE_FONT
+    ws["A2"] = "Amounts on top · each category's share of the month below"
+    ws["A2"].font = Font(color="6B7280")
+
+    # ── Amounts grid ──
+    amt_hdr = 4
+    _write_header(ws, amt_hdr, ["Category ($)"] + months + ["Total"])
+    amt_first = amt_hdr + 1
+    amt_last = amt_hdr + n
+    for j, cat in enumerate(cats):
+        r = amt_first + j
+        ws.cell(row=r, column=1, value=cat).font = LABEL_FONT
+        for k, m in enumerate(months):
+            c = ws.cell(row=r, column=2 + k, value=(
+                f'=SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{cat}",'
+                f'Transactions!$H:$H,"{m}",Transactions!$C:$C,"Spending")'))
+            c.number_format = MONEY_FMT
+        rt = ws.cell(row=r, column=total_col,
+                     value=f"=SUM(B{r}:{L(last_month_col)}{r})")
+        rt.number_format = MONEY_FMT
+        rt.font = LABEL_FONT
+    amt_total = amt_last + 1
+    ws.cell(row=amt_total, column=1, value="Total").font = HEADER_FONT
+    ws.cell(row=amt_total, column=1).fill = HEADER_FILL
+    for c in range(2, total_col + 1):
+        col = L(c)
+        cell = ws.cell(row=amt_total, column=c,
+                       value=f"=SUM({col}{amt_first}:{col}{amt_last})")
+        cell.number_format = MONEY_FMT
+        cell.font = HEADER_FONT
+        cell.fill = HEADER_FILL
+
+    # ── Share-of-month grid (reads the amounts above) ──
+    pct_hdr = amt_total + 3
+    _write_header(ws, pct_hdr, ["Category (% of month)"] + months)
+    pct_first = pct_hdr + 1
+    for j, cat in enumerate(cats):
+        pr = pct_first + j
+        ws.cell(row=pr, column=1, value=cat).font = LABEL_FONT
+        ar = amt_first + j           # matching amounts row
+        for k in range(len(months)):
+            col = L(2 + k)
+            cell = ws.cell(row=pr, column=2 + k, value=(
+                f"=IFERROR({col}{ar}/{col}${amt_total},0)"))
+            cell.number_format = "0.0%"
+
+    ws.column_dimensions["A"].width = 24
+    for c in range(2, total_col + 1):
+        ws.column_dimensions[L(c)].width = 10
+    ws.freeze_panes = "B5"
+
+
 # ── workbook assembly (shared by CLI + web) ────────────────────────
 def build_workbook(df, prior_m=None, prior_n=None):
     """Build the finance workbook from a classified DataFrame. Returns a Workbook."""
@@ -410,6 +475,7 @@ def build_workbook(df, prior_m=None, prior_n=None):
     ws_tx = wb.create_sheet("Transactions")
     ws_m = wb.create_sheet("Merchants")
     ws_n = wb.create_sheet("Names")
+    ws_month = wb.create_sheet("By Month")
     ws_lists = wb.create_sheet("Lists")
 
     build_lists(ws_lists)
@@ -417,6 +483,7 @@ def build_workbook(df, prior_m=None, prior_n=None):
     build_mapping_sheet(ws_n, "Name", names, TRANSFER_OPTIONS, "B")
     build_transactions(ws_tx, df, len(spend), len(names))
     build_dashboard(ws_dash, df)
+    build_month_matrix(ws_month, df)
     return wb, spend, names
 
 
