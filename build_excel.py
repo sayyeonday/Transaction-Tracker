@@ -281,6 +281,13 @@ def build_dashboard(ws, df):
         vc = ws.cell(row=i, column=2, value=formula)
         vc.number_format = MONEY_FMT
 
+    # Month selector — drives the per-month category pie below.
+    MONTH_CELL = "B8"
+    sel = ws.cell(row=8, column=1, value="Pie month →")
+    sel.font = LABEL_FONT
+    mc = ws.cell(row=8, column=2, value=(months[-1] if months else ""))
+    mc.font = Font(bold=True, color="2563EB")
+
     # Spending by category table
     cat_top = 10
     _write_header(ws, cat_top, ["Category", "Spent"])
@@ -305,6 +312,16 @@ def build_dashboard(ws, df):
         v.number_format = MONEY_FMT
     mon_end = mon_top + len(months)
 
+    # Month dropdown validation (references the Month column just written).
+    if months:
+        dv = DataValidation(
+            type="list",
+            formula1=f"$A${mon_top + 1}:$A${mon_end}",
+            allow_blank=False,
+        )
+        ws.add_data_validation(dv)
+        dv.add(MONTH_CELL)
+
     # Income breakdown table
     inc_top = mon_end + 3
     _write_header(ws, inc_top, ["Income source", "Amount"])
@@ -315,13 +332,27 @@ def build_dashboard(ws, df):
         v = ws.cell(row=r, column=2, value=(
             f'=SUMIFS(Transactions!$G:$G,Transactions!$I:$I,"{lbl}")'))
         v.number_format = MONEY_FMT
+    inc_end = inc_top + len(inc_labels)
+
+    # Per-month spending by category (recomputes when the month cell changes)
+    pm_top = inc_end + 3
+    _write_header(ws, pm_top, ["Category", "Spent in selected month"])
+    for j, cat in enumerate(cd.SPENDING_CATEGORIES):
+        r = pm_top + 1 + j
+        ws.cell(row=r, column=1, value=cat)
+        v = ws.cell(row=r, column=2, value=(
+            f'=SUMIFS(Transactions!$F:$F,Transactions!$I:$I,"{cat}",'
+            f'Transactions!$H:$H,${MONTH_CELL[0]}${MONTH_CELL[1:]},'
+            f'Transactions!$C:$C,"Spending")'))
+        v.number_format = MONEY_FMT
+    pm_end = pm_top + n_spend
 
     ws.column_dimensions["A"].width = 22
-    ws.column_dimensions["B"].width = 14
+    ws.column_dimensions["B"].width = 22
 
     # Charts (anchored in column D so they don't overlap the tables)
     cat_chart = PieChart()
-    cat_chart.title = "Spending by category"
+    cat_chart.title = "Spending by category (all months)"
     cat_chart.height = 9
     cat_chart.width = 18
     data = Reference(ws, min_col=2, min_row=cat_top, max_row=cat_end)
@@ -347,6 +378,19 @@ def build_dashboard(ws, df):
     mon_chart.x_axis.delete = False   # force month labels to render
     mon_chart.y_axis.delete = False
     ws.add_chart(mon_chart, "D24")
+
+    pm_chart = PieChart()
+    pm_chart.title = "Spending by category (selected month)"
+    pm_chart.height = 9
+    pm_chart.width = 18
+    pdata = Reference(ws, min_col=2, min_row=pm_top, max_row=pm_end)
+    pcats = Reference(ws, min_col=1, min_row=pm_top + 1, max_row=pm_end)
+    pm_chart.add_data(pdata, titles_from_data=True)
+    pm_chart.set_categories(pcats)
+    _text_categories(pm_chart, list(cd.SPENDING_CATEGORIES))
+    pm_chart.dataLabels = DataLabelList()
+    pm_chart.dataLabels.showPercent = True
+    ws.add_chart(pm_chart, "D44")
 
 
 # ── workbook assembly (shared by CLI + web) ────────────────────────

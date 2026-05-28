@@ -35,10 +35,22 @@ MOVE_PATTERNS = [
 
 # ── The label vocabularies (also used to populate the UI dropdowns) ──
 SPENDING_CATEGORIES = [
-    "Food_DiningOut", "Food_Cafe", "Food_Groceries",
-    "Shopping_General", "Shopping_Beauty",
-    "Education", "Subscription_Software", "Travel_Leisure",
-    "Health_Medical", "Transport_Daily",
+    # Food & drink
+    "Food_Groceries", "Food_DiningOut", "Food_Cafe", "Food_Delivery", "Food_AlcoholBars",
+    # Shopping
+    "Shopping_General", "Shopping_Clothing", "Shopping_Beauty",
+    "Shopping_Electronics", "Shopping_HomeGoods",
+    # Transport & travel
+    "Transport_Daily", "Transport_Rideshare", "Transport_Fuel", "Transport_Parking",
+    "Travel_Flights", "Travel_Accommodation", "Travel_Leisure",
+    # Bills & housing
+    "Bills_Rent", "Bills_Utilities", "Bills_PhoneInternet", "Bills_Insurance",
+    # Health
+    "Health_Medical", "Health_Pharmacy", "Health_Fitness",
+    # Lifestyle
+    "Entertainment", "Subscription_Software", "Subscription_Streaming",
+    "Education", "Gifts_Donations", "Pets", "Kids_Family",
+    # Misc
     "Fees_Banking", "Cash_Withdrawal", "Other",
 ]
 TRANSFER_CATEGORIES = [
@@ -60,44 +72,124 @@ DEFAULT_CATEGORIES = {
     # Food_Groceries
     "WALMART": "Food_Groceries", "WAL-MART": "Food_Groceries", "FOODMART": "Food_Groceries",
     "TERRA FOOD": "Food_Groceries", "NO FRILLS": "Food_Groceries", "COSTCO": "Food_Groceries",
-    "SUPERSTORE": "Food_Groceries", "TASC": "Food_Groceries",
+    "SUPERSTORE": "Food_Groceries", "TASC": "Food_Groceries", "LOBLAW": "Food_Groceries",
+    "METRO": "Food_Groceries", "SOBEYS": "Food_Groceries", "FRESHCO": "Food_Groceries",
+    "FOOD BASICS": "Food_Groceries", "T&T": "Food_Groceries", "H MART": "Food_Groceries",
+    "GALLERIA": "Food_Groceries", "FARM BOY": "Food_Groceries",
     # Food_Cafe
     "TIM HORTONS": "Food_Cafe", "STARBUCKS": "Food_Cafe", "CAFE": "Food_Cafe",
     "CREPE": "Food_Cafe", "TEN REN": "Food_Cafe", "NAYAX": "Food_Cafe",
+    "SECOND CUP": "Food_Cafe", "COFFEE": "Food_Cafe", "BUBBLE TEA": "Food_Cafe",
+    "CHATIME": "Food_Cafe", "GONG CHA": "Food_Cafe",
     # Food_DiningOut
     "MCDONALD": "Food_DiningOut", "EARLS": "Food_DiningOut", "PAK PAK": "Food_DiningOut",
     "YAMA": "Food_DiningOut", "JUSFRES": "Food_DiningOut", "KITCHEN": "Food_DiningOut",
     "PIZZA": "Food_DiningOut", "SUSHI": "Food_DiningOut", "RESTAURANT": "Food_DiningOut",
-    "KIM'S KOREAN": "Food_DiningOut", "BAR BIRU": "Food_DiningOut", "ROL SAN": "Food_DiningOut",
+    "KIM'S KOREAN": "Food_DiningOut", "ROL SAN": "Food_DiningOut", "BURGER": "Food_DiningOut",
+    "SUBWAY": "Food_DiningOut", "A&W": "Food_DiningOut", "KFC": "Food_DiningOut",
+    "WENDY": "Food_DiningOut", "POPEYE": "Food_DiningOut", "CHIPOTLE": "Food_DiningOut",
+    "OSMOW": "Food_DiningOut", "RAMEN": "Food_DiningOut",
+    # Food_Delivery
+    "UBER EATS": "Food_Delivery", "UBR* EATS": "Food_Delivery", "DOORDASH": "Food_Delivery",
+    "SKIPTHEDISHES": "Food_Delivery", "SKIP THE": "Food_Delivery", "FANTUAN": "Food_Delivery",
+    "INSTACART": "Food_Delivery",
+    # Food_AlcoholBars
+    "LCBO": "Food_AlcoholBars", "BEER STORE": "Food_AlcoholBars", "BAR BIRU": "Food_AlcoholBars",
+    "BREWERY": "Food_AlcoholBars", "WINE": "Food_AlcoholBars",
     # Shopping_General
     "TEMU": "Shopping_General", "AMZN": "Shopping_General", "AMAZON": "Shopping_General",
-    "SHEIN": "Shopping_General", "MINISO": "Shopping_General", "KIOKII": "Shopping_General",
-    "DOLLARAMA": "Shopping_General", "CHAPTERS": "Shopping_General",
-    "URBAN PLANET": "Shopping_General", "DICKIES": "Shopping_General",
-    "ARITZIA": "Shopping_General", "COACH": "Shopping_General", "CIRCLE K": "Shopping_General",
+    "MINISO": "Shopping_General", "KIOKII": "Shopping_General", "DOLLARAMA": "Shopping_General",
+    "CHAPTERS": "Shopping_General", "INDIGO": "Shopping_General", "CIRCLE K": "Shopping_General",
+    "WINNERS": "Shopping_General",
+    # Shopping_Clothing
+    "SHEIN": "Shopping_Clothing", "URBAN PLANET": "Shopping_Clothing", "DICKIES": "Shopping_Clothing",
+    "ARITZIA": "Shopping_Clothing", "COACH": "Shopping_Clothing", "UNIQLO": "Shopping_Clothing",
+    "H&M": "Shopping_Clothing", "ZARA": "Shopping_Clothing", "LULULEMON": "Shopping_Clothing",
+    "OLD NAVY": "Shopping_Clothing", "NIKE": "Shopping_Clothing", "ADIDAS": "Shopping_Clothing",
     # Shopping_Beauty
-    "SEPHORA": "Shopping_Beauty", "HAIR SHINE": "Shopping_Beauty",
+    "SEPHORA": "Shopping_Beauty", "HAIR SHINE": "Shopping_Beauty", "MAC COSMETICS": "Shopping_Beauty",
+    "ULTA": "Shopping_Beauty", "SALON": "Shopping_Beauty", "NAILS": "Shopping_Beauty",
+    "BARBER": "Shopping_Beauty",
+    # Shopping_Electronics
+    "BEST BUY": "Shopping_Electronics", "APPLE STORE": "Shopping_Electronics",
+    "CANADA COMPUTERS": "Shopping_Electronics", "THE SOURCE": "Shopping_Electronics",
+    "NEWEGG": "Shopping_Electronics",
+    # Shopping_HomeGoods
+    "IKEA": "Shopping_HomeGoods", "HOME DEPOT": "Shopping_HomeGoods",
+    "CANADIAN TIRE": "Shopping_HomeGoods", "HOMESENSE": "Shopping_HomeGoods",
+    "BED BATH": "Shopping_HomeGoods", "STRUCTUBE": "Shopping_HomeGoods",
     # Education
     "UTM": "Education", "U OF T": "Education", "UNIVERSITY OF TORONTO": "Education",
     "BOOKSTORE": "Education", "RECREATION AT U OF T": "Education", "LCC": "Education",
-    "TRINITY": "Education",
+    "TRINITY": "Education", "TUITION": "Education", "UDEMY": "Education", "COURSERA": "Education",
     # Subscription_Software
     "OPENAI": "Subscription_Software", "CHATGPT": "Subscription_Software",
-    "GOOGLE": "Subscription_Software", "NETFLIX": "Subscription_Software",
-    "CLOUD": "Subscription_Software", "APPLE.COM": "Subscription_Software",
-    "4KDOWNLOAD": "Subscription_Software", "SPOTIFY": "Subscription_Software",
+    "GOOGLE": "Subscription_Software", "CLAUDE.AI": "Subscription_Software",
+    "ANTHROPIC": "Subscription_Software", "CLOUD": "Subscription_Software",
+    "APPLE.COM": "Subscription_Software", "4KDOWNLOAD": "Subscription_Software",
+    "MICROSOFT": "Subscription_Software", "ADOBE": "Subscription_Software",
+    "GITHUB": "Subscription_Software", "NOTION": "Subscription_Software",
+    "DROPBOX": "Subscription_Software",
+    # Subscription_Streaming
+    "NETFLIX": "Subscription_Streaming", "SPOTIFY": "Subscription_Streaming",
+    "DISNEY": "Subscription_Streaming", "CRAVE": "Subscription_Streaming",
+    "YOUTUBE PREMIUM": "Subscription_Streaming", "PRIME VIDEO": "Subscription_Streaming",
+    "APPLE MUSIC": "Subscription_Streaming", "HBO": "Subscription_Streaming",
+    # Entertainment
+    "CINEPLEX": "Entertainment", "TICKETMASTER": "Entertainment", "EVENTBRITE": "Entertainment",
+    "STEAM": "Entertainment", "NINTENDO": "Entertainment", "PLAYSTATION": "Entertainment",
+    "XBOX": "Entertainment",
+    # Travel_Flights
+    "UNITED": "Travel_Flights", "ASIANA": "Travel_Flights", "AIR CANADA": "Travel_Flights",
+    "WESTJET": "Travel_Flights", "FLAIR": "Travel_Flights", "KOREAN AIR": "Travel_Flights",
+    "EXPEDIA": "Travel_Flights",
+    # Travel_Accommodation
+    "AIRBNB": "Travel_Accommodation", "HOTEL": "Travel_Accommodation",
+    "BOOKING.COM": "Travel_Accommodation", "MARRIOTT": "Travel_Accommodation",
+    "HILTON": "Travel_Accommodation",
     # Travel_Leisure
-    "VIA RAIL": "Travel_Leisure", "UNITED": "Travel_Leisure", "ASIANA": "Travel_Leisure",
-    "CINEPLEX": "Travel_Leisure", "TICKETMASTER": "Travel_Leisure",
-    "EVENTBRITE": "Travel_Leisure", "PEARSON PARKING": "Travel_Leisure", "RATP": "Travel_Leisure",
-    # Health_Medical
-    "SHOPPERS DRUG": "Health_Medical", "ARC EYECARE": "Health_Medical",
+    "VIA RAIL": "Travel_Leisure", "RATP": "Travel_Leisure", "MUSEUM": "Travel_Leisure",
     # Transport_Daily
-    "UBER": "Transport_Daily", "UBR*": "Transport_Daily", "LYFT": "Transport_Daily",
-    "PRESTO": "Transport_Daily", "GO TRANSIT": "Transport_Daily", "PARKING": "Transport_Daily",
+    "PRESTO": "Transport_Daily", "GO TRANSIT": "Transport_Daily", "TTC": "Transport_Daily",
+    "TRANSIT": "Transport_Daily",
+    # Transport_Rideshare
+    "UBER": "Transport_Rideshare", "UBR*": "Transport_Rideshare", "LYFT": "Transport_Rideshare",
+    # Transport_Fuel
+    "PETRO": "Transport_Fuel", "ESSO": "Transport_Fuel", "SHELL": "Transport_Fuel",
+    "PETRO-CANADA": "Transport_Fuel", "ULTRAMAR": "Transport_Fuel", "HUSKY": "Transport_Fuel",
+    # Transport_Parking
+    "PEARSON PARKING": "Transport_Parking", "PARKING": "Transport_Parking",
+    "GREEN P": "Transport_Parking", "IMPARK": "Transport_Parking",
+    # Bills_Utilities
+    "HYDRO": "Bills_Utilities", "ENBRIDGE": "Bills_Utilities", "TORONTO HYDRO": "Bills_Utilities",
+    "UTILITY": "Bills_Utilities",
+    # Bills_PhoneInternet
+    "ROGERS": "Bills_PhoneInternet", "BELL CANADA": "Bills_PhoneInternet",
+    "TELUS": "Bills_PhoneInternet", "FIDO": "Bills_PhoneInternet",
+    "FREEDOM MOBILE": "Bills_PhoneInternet", "KOODO": "Bills_PhoneInternet",
+    "VIRGIN": "Bills_PhoneInternet", "CHATR": "Bills_PhoneInternet",
+    # Bills_Insurance
+    "INSURANCE": "Bills_Insurance", "INTACT": "Bills_Insurance", "SUN LIFE": "Bills_Insurance",
+    "MANULIFE": "Bills_Insurance",
+    # Bills_Rent
+    "RENT": "Bills_Rent", "PROPERTY MANAGEMENT": "Bills_Rent",
+    # Health_Pharmacy
+    "SHOPPERS DRUG": "Health_Pharmacy", "REXALL": "Health_Pharmacy", "PHARMACY": "Health_Pharmacy",
+    "PHARMA": "Health_Pharmacy",
+    # Health_Medical
+    "ARC EYECARE": "Health_Medical", "DENTAL": "Health_Medical", "DENTIST": "Health_Medical",
+    "CLINIC": "Health_Medical", "PHYSIO": "Health_Medical", "OPTICAL": "Health_Medical",
+    # Health_Fitness
+    "GOODLIFE": "Health_Fitness", "FITNESS": "Health_Fitness", "GYM": "Health_Fitness",
+    "YOGA": "Health_Fitness",
+    # Pets
+    "PETSMART": "Pets", "PET VALU": "Pets", "PETCO": "Pets", "VETERINARY": "Pets",
+    # Gifts_Donations
+    "GOFUNDME": "Gifts_Donations", "DONATION": "Gifts_Donations", "RED CROSS": "Gifts_Donations",
     # Fees_Banking / Cash
     "SERVICE CHARGE": "Fees_Banking", "NETWORK TRANSACTION FEE": "Fees_Banking",
-    "FX CASH": "Fees_Banking", "ATM WITHDRAWAL": "Cash_Withdrawal",
+    "FX CASH": "Fees_Banking", "OVERLIMIT": "Fees_Banking", "NSF": "Fees_Banking",
+    "ATM WITHDRAWAL": "Cash_Withdrawal",
 }
 
 # Only the mechanical movements are pre-filled. Named e-transfers / deposits
