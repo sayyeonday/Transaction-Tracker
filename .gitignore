@@ -1,0 +1,11 @@
+# ── Personal financial data — NEVER commit these ──
+credit/
+debit/
+finance.xlsx
+output/
+
+# Python / OS noise
+__pycache__/
+*.pyc
+.DS_Store
+.claude/
