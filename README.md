@@ -6,16 +6,22 @@ charts that update themselves.
 
 No accounts, no internet, no AI. Your data stays with you.
 
+### ▶︎ Use it now: <https://sayyeonday.github.io/Transaction-Tracker/>
+
+Just open the link, pick your CSV files, and download your workbook. Nothing to
+install — it all runs in your browser.
+
 ---
 
 ## Two ways to use it
 
 ### A. The website (easiest, most private)
 
-Open the site, pick your CSV files, download `finance.xlsx`. **Everything runs
-inside your own browser — your transactions are never uploaded or stored anywhere.**
+Open <https://sayyeonday.github.io/Transaction-Tracker/>, pick your CSV files, and
+download `finance.xlsx`. **Everything runs inside your own browser — your
+transactions are never uploaded or stored anywhere.**
 
-To run it locally:
+To run it locally instead:
 
 ```bash
 python3 -m http.server 8530 --directory web
